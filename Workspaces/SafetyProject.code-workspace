@@ -1,0 +1,17 @@
+{
+    "folders": [
+        {
+            "path": ".."
+        }
+    ],
+
+    "settings": {
+        "chat.agentFilesLocations": {
+            "Development/Tooling/Agents": true
+        },
+
+        "chat.instructionsFilesLocations": {
+            "Development/Tooling/Instructions": true
+        }
+    }
+}

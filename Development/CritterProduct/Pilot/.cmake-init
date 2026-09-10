@@ -1,0 +1,5 @@
+# cmake-init metadata
+VERSION|1
+EXECUTABLE|Pilot|main.c
+EXECUTABLE|test_memory_computation|tests/test_memory_computation.c
+TEST|test_memory_computation
