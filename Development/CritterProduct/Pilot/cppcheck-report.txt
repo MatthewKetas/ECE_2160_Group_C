@@ -1,0 +1,4 @@
+Memory/critter_memory.c:255:38: style: Condition 'count>0U' is always true [knownConditionTrueFalse]
+Memory/critter_memory.c:205:12: style: The scope of the variable 'index' can be reduced. [variableScope]
+Memory/critter_memory.c:58:38: style: Parameter 'values' can be declared as pointer to const [constParameterPointer]
+nofile:0:0: information: Active checkers: 113/592 (use --checkers-report=<filename> to see details) [checkersReport]
