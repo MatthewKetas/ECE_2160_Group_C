@@ -31,8 +31,8 @@ static int critter_read_sense_hat_environment(double *temperature_c,
     if (!initialized)
     {
         if (sense_hat_environment_init(&sensor, "/dev/i2c-1",
-                                      SENSE_HAT_HTS_ODR_1_HZ,
-                                      SENSE_HAT_PRESSURE_ODR_1_HZ) != 0)
+                                      SENSE_HAT_HTS_ODR_12_5_HZ,
+                                      SENSE_HAT_PRESSURE_ODR_25_HZ) != 0)
         {
             return -1;
         }
@@ -262,7 +262,8 @@ int critter_io_read_sample(critter_sample_t *sample)
     critter_temperature_source_t source = TEMPERATURE_SOURCE_UNKNOWN;
     double humidity = 0.0;
     double pressure = 0.0;
-
+    struct timespec timestamp_ts;
+    
     if (sample == NULL)
         return -1;
 
@@ -282,7 +283,12 @@ int critter_io_read_sample(critter_sample_t *sample)
         sample->has_pressure = false;
     }
 
-    sample->timestamp_s = (double)time(NULL);
+    if (clock_gettime(CLOCK_REALTIME, &timestamp_ts) != 0)
+        return -1;
+
+    sample->timestamp_s = (double)timestamp_ts.tv_sec +
+                          (double)timestamp_ts.tv_nsec / 1000000000.0;
+
     sample->temperature_c = temperature_c;
     sample->source = source;
     sample->humidity_percent = humidity;
