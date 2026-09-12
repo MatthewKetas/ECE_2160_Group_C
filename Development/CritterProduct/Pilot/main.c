@@ -13,12 +13,15 @@ int main(void)
     critter_memory_t memory;
     critter_window_summary_t summary;
     critter_analysis_result_t analysis;
+
     const double collection_window_s = 60.0;
-    const double sample_interval_s = 1.0;
+    const double sample_interval_s = 0.1;
     const double report_interval_s = 5.0;
     const double prediction_horizon_s = 30.0;
+
     struct timespec start_ts;
     struct timespec now_ts;
+
     double elapsed_s = 0.0;
     double last_report_s = 0.0;
     size_t total_read_attempts = 0U;
@@ -27,7 +30,7 @@ int main(void)
     size_t total_outliers = 0U;
     double sampling_rate_hz = 0.0;
 
-    if (critter_memory_init(&memory, 10U) != 0)
+    if (critter_memory_init(&memory, 100U) != 0)
     {
         fprintf(stderr, "failed to initialize memory\n");
         return 1;
@@ -62,6 +65,7 @@ int main(void)
         }
 
         add_result = critter_memory_add_sample(&memory, &sample);
+
         if (add_result == 0)
         {
             total_valid_samples += 1U;
@@ -81,26 +85,45 @@ int main(void)
         }
 
         elapsed_s = (double)(now_ts.tv_sec - start_ts.tv_sec)
-                 + (double)(now_ts.tv_nsec - start_ts.tv_nsec) / 1000000000.0;
-
-        if (elapsed_s < collection_window_s)
-        {
-            struct timespec sleep_ts;
-            double remaining_s = sample_interval_s - (elapsed_s - (double)((long long)elapsed_s));
-            sleep_ts.tv_sec = (time_t)remaining_s;
-            sleep_ts.tv_nsec = (long)((remaining_s - (double)sleep_ts.tv_sec) * 1000000000.0);
-            nanosleep(&sleep_ts, NULL);
-        }
+                  + (double)(now_ts.tv_nsec - start_ts.tv_nsec) / 1000000000.0;
 
         if (elapsed_s >= last_report_s + report_interval_s)
         {
             int elapsed_seconds = (int)elapsed_s;
             int minutes = elapsed_seconds / 60;
             int seconds = elapsed_seconds % 60;
+
             printf("\rCollecting: %02d:%02d / 01:00", minutes, seconds);
             fflush(stdout);
+
             last_report_s = elapsed_s;
         }
+
+        if (elapsed_s < collection_window_s)
+        {
+            struct timespec sleep_ts;
+
+            sleep_ts.tv_sec = (time_t)sample_interval_s;
+            sleep_ts.tv_nsec =
+                (long)((sample_interval_s - (double)sleep_ts.tv_sec) * 1000000000.0);
+
+            if (nanosleep(&sleep_ts, NULL) != 0)
+            {
+                fprintf(stderr, "\nsample delay interrupted\n");
+                critter_memory_free(&memory);
+                return 1;
+            }
+        }
+
+        if (clock_gettime(CLOCK_MONOTONIC, &now_ts) != 0)
+        {
+            fprintf(stderr, "failed to read time during one-minute collection\n");
+            critter_memory_free(&memory);
+            return 1;
+        }
+
+        elapsed_s = (double)(now_ts.tv_sec - start_ts.tv_sec)
+                  + (double)(now_ts.tv_nsec - start_ts.tv_nsec) / 1000000000.0;
     }
 
     printf("\rCollecting: 01:00 / 01:00\n");
@@ -119,8 +142,8 @@ int main(void)
         return 1;
     }
 
-    if (collection_window_s > 0.0)
-        sampling_rate_hz = (double)total_read_attempts / collection_window_s;
+    if (elapsed_s > 0.0)
+        sampling_rate_hz = (double)total_read_attempts / elapsed_s;
 
     printf("metrics: reads=%zu valid=%zu rejected=%zu outliers=%zu rate=%.2fHz retained=%.2f\n",
            total_read_attempts,
