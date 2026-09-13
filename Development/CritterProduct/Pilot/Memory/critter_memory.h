@@ -3,6 +3,8 @@
 
 #include "../critter_types.h"
 
+
+#define CRITTER_MEMORY_MAX_SAMPLES 4096U
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -36,9 +36,9 @@ static double critter_median(double *values, size_t count)
     if (count == 0)
         return 0.0;
 
-    for (i = 0; i < count; ++i)
+    for (i = 0; (i < count) && (i < CRITTER_MEMORY_MAX_SAMPLES); ++i)
     {
-        for (j = i + 1; j < count; ++j)
+        for (j = i + 1; (j < count) && (j < CRITTER_MEMORY_MAX_SAMPLES); ++j)
         {
             if (values[j] < values[i])
             {
@@ -63,7 +63,7 @@ static double critter_stddev(const double *values, size_t count, double mean)
     if (count == 0)
         return 0.0;
 
-    for (i = 0; i < count; ++i)
+    for (i = 0; (i < count) && (i < CRITTER_MEMORY_MAX_SAMPLES); ++i)
     {
         double diff = values[i] - mean;
         variance += diff * diff;
@@ -116,14 +116,14 @@ static int critter_detect_outlier(const critter_memory_t *memory, const critter_
     window_size = valid_count;
     temperatures = memory->scratch;
 
-    for (i = 0; i < window_size; ++i)
+    for (i = 0; (i < window_size) && (i < CRITTER_MEMORY_MAX_SAMPLES); ++i)
     {
         size_t idx = (memory->head + memory->capacity - window_size + i) % memory->capacity;
         temperatures[i] = memory->buffer[idx].temperature_c;
     }
 
     median = critter_median(temperatures, window_size);
-    for (i = 0; i < window_size; ++i)
+    for (i = 0; (i < window_size) && (i < CRITTER_MEMORY_MAX_SAMPLES); ++i)
     {
         temperatures[i] = fabs(temperatures[i] - median);
     }
@@ -140,7 +140,7 @@ static int critter_detect_outlier(const critter_memory_t *memory, const critter_
 
 int critter_memory_init(critter_memory_t *memory, size_t capacity)
 {
-    if (memory == NULL || capacity == 0U)
+    if (memory == NULL || capacity == 0U || capacity > CRITTER_MEMORY_MAX_SAMPLES)
         return -1;
 
     memset(memory, 0, sizeof(*memory));
@@ -258,7 +258,7 @@ int critter_memory_build_summary(const critter_memory_t *memory,
     summary->valid_sample_count = count;
     summary->outlier_count = memory->total_outliers;
 
-    for (i = 0U; i < count; ++i)
+    for (i = 0U; (i < count) && (i < CRITTER_MEMORY_MAX_SAMPLES); ++i)
     {
         size_t index;
 
