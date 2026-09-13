@@ -36,6 +36,9 @@ static int critter_write_all(int fd, const char *data, size_t length)
 {
     size_t written = 0U;
     size_t guard;
+
+    if (fd < 0 || data == NULL)
+        return -1;
  
     for (guard = 0U; (written < length) && (guard < CRITTER_IO_MAX_IO_ITERS); ++guard)
     {
@@ -63,12 +66,15 @@ typedef struct
     int    at_eof;
 } critter_line_reader_t;
  
-static void critter_line_reader_open(critter_line_reader_t *reader, int fd)
+static int critter_line_reader_open(critter_line_reader_t *reader, int fd)
 {
+    if (reader == NULL)
+        return -1;
     reader->fd = fd;
     reader->chunk_len = 0U;
     reader->chunk_pos = 0U;
     reader->at_eof = 0;
+    return 0;
 }
  
 
@@ -214,7 +220,11 @@ static int critter_read_data_temperature(double *temperature_c)
         return -1;
     }
  
-    critter_line_reader_open(&reader, fd);
+    if (critter_line_reader_open(&reader, fd) != 0)
+    {
+        (void)close(fd);
+        return -1;
+    }
  
     for (line_index = 0U; line_index < CRITTER_IO_MAX_LINES; ++line_index)
     {
@@ -227,7 +237,7 @@ static int critter_read_data_temperature(double *temperature_c)
  
         if (sscanf(line, "%*[^,],%lf", &value) == 1)
         {
-            close(fd);
+            (void)close(fd);
             initialized = true;
             last_value = value;
             *temperature_c = value;
@@ -235,7 +245,7 @@ static int critter_read_data_temperature(double *temperature_c)
         }
     }
  
-    close(fd);
+    (void)close(fd);
  
     if (initialized)
     {
@@ -455,7 +465,6 @@ int critter_io_save_sample(const critter_sample_t *sample)
  
     if (env_path != NULL && env_path[0] != '\0')
     {
-        snprintf(path, sizeof(path), "%s", env_path);
         written = snprintf(path, sizeof(path), "%s", env_path);
         if (written < 0 || (size_t)written >= sizeof(path))
             return -1;
