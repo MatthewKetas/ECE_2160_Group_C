@@ -287,24 +287,26 @@ static int critter_resolve_executable_directory(char *buffer, size_t buffer_size
     char exe_path[PATH_MAX];
     ssize_t length;
     char *slash;
-
+    int written;
+ 
     if (buffer == NULL || buffer_size == 0U)
         return -1;
-
+ 
     length = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1U);
     if (length < 0 || (size_t)length >= sizeof(exe_path))
         return -1;
-
+ 
     exe_path[length] = '\0';
     slash = strrchr(exe_path, '/');
     if (slash == NULL)
         return -1;
-
+ 
     *slash = '\0';
-
-    if (snprintf(buffer, buffer_size, "%s", exe_path) >= (int)buffer_size)
+ 
+    written = snprintf(buffer, buffer_size, "%s", exe_path);
+    if (written < 0 || (size_t)written >= buffer_size)
         return -1;
-
+ 
     return 0;
 }
 
@@ -331,13 +333,15 @@ static int critter_ensure_runtime_data_directory(void)
     char app_dir[PATH_MAX];
     char data_dir[PATH_MAX];
     struct stat info;
-
+    int written;
+ 
     if (critter_resolve_executable_directory(app_dir, sizeof(app_dir)) != 0)
         return -1;
-
-    if (snprintf(data_dir, sizeof(data_dir), "%s/Data", app_dir) >= (int)sizeof(data_dir))
+ 
+    written = snprintf(data_dir, sizeof(data_dir), "%s/Data", app_dir);
+    if (written < 0 || (size_t)written >= sizeof(data_dir))
         return -1;
-
+ 
     if (stat(data_dir, &info) != 0)
     {
         if (mkdir(data_dir, 0777) != 0 && errno != EEXIST)
@@ -347,7 +351,7 @@ static int critter_ensure_runtime_data_directory(void)
     {
         return -1;
     }
-
+ 
     return 0;
 }
 
@@ -401,13 +405,14 @@ int critter_io_read_sample(critter_sample_t *sample)
     critter_temperature_source_t source = TEMPERATURE_SOURCE_UNKNOWN;
     double humidity = 0.0;
     double pressure = 0.0;
-
+    time_t now;
+ 
     if (sample == NULL)
         return -1;
-
+ 
     if (critter_io_get_temperature(&temperature_c, &source) != 0)
         return -1;
-
+ 
     if (source == TEMPERATURE_SOURCE_SENSE_HAT)
     {
         if (critter_read_sense_hat_environment(&temperature_c, &humidity, &pressure) != 0)
@@ -420,13 +425,18 @@ int critter_io_read_sample(critter_sample_t *sample)
         sample->has_humidity = false;
         sample->has_pressure = false;
     }
+ 
 
-    sample->timestamp_s = (double)time(NULL);
+    now = time(NULL);
+    if (now == (time_t)(-1))
+        return -1;
+ 
+    sample->timestamp_s = (double)now;
     sample->temperature_c = temperature_c;
     sample->source = source;
     sample->humidity_percent = humidity;
     sample->pressure_hpa = pressure;
-
+ 
     return 0;
 }
 
@@ -446,6 +456,9 @@ int critter_io_save_sample(const critter_sample_t *sample)
     if (env_path != NULL && env_path[0] != '\0')
     {
         snprintf(path, sizeof(path), "%s", env_path);
+        written = snprintf(path, sizeof(path), "%s", env_path);
+        if (written < 0 || (size_t)written >= sizeof(path))
+            return -1;
     }
     else
     {
@@ -533,7 +546,9 @@ int critter_io_save_metrics(const critter_window_summary_t *summary,
  
     if (env_path != NULL && env_path[0] != '\0')
     {
-        snprintf(path, sizeof(path), "%s", env_path);
+        written = snprintf(path, sizeof(path), "%s", env_path);
+        if (written < 0 || (size_t)written >= sizeof(path))
+            return -1;
     }
     else
     {
@@ -550,7 +565,12 @@ int critter_io_save_metrics(const critter_window_summary_t *summary,
                 *(last_slash + 1) = '\0';
             }
         }
-        snprintf(path + strlen(path), sizeof(path) - strlen(path), "collection_metrics.csv");
+        {
+            size_t used = strlen(path);
+            written = snprintf(path + used, sizeof(path) - used, "collection_metrics.csv");
+            if (written < 0 || (size_t)written >= sizeof(path) - used)
+            return -1;
+        }
     }
  
     fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
