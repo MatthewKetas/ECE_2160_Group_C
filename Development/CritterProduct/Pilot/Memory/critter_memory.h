@@ -10,6 +10,7 @@ extern "C" {
 typedef struct
 {
     critter_sample_t *buffer;
+    double *scratch;
     size_t capacity;
     size_t head;
     size_t count;

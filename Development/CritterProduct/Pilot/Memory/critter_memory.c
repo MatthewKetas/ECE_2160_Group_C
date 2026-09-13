@@ -105,14 +105,16 @@ static int critter_detect_outlier(const critter_memory_t *memory, const critter_
     if (memory == NULL || sample == NULL)
         return 0;
 
+    if (memory->scratch == NULL)
+        return 0;
+
+
     valid_count = memory->count;
     if (valid_count < 3U)
         return 0;
 
     window_size = valid_count;
-    temperatures = (double *)malloc(sizeof(double) * window_size);
-    if (temperatures == NULL)
-        return 0;
+    temperatures = memory->scratch;
 
     for (i = 0; i < window_size; ++i)
     {
@@ -130,11 +132,9 @@ static int critter_detect_outlier(const critter_memory_t *memory, const critter_
 
     if (fabs(sample->temperature_c - median) > threshold)
     {
-        free(temperatures);
         return 1;
     }
 
-    free(temperatures);
     return 0;
 }
 
@@ -149,6 +149,16 @@ int critter_memory_init(critter_memory_t *memory, size_t capacity)
     if (memory->buffer == NULL)
         return -1;
 
+    memory->scratch = (double *)calloc(capacity, sizeof(double));
+    if (memory->scratch == NULL)
+    {
+        free(memory->buffer);
+        memory->buffer = NULL;
+        return -1;
+
+
+    }
+
     return 0;
 }
 
@@ -159,6 +169,8 @@ void critter_memory_free(critter_memory_t *memory)
 
     free(memory->buffer);
     memory->buffer = NULL;
+    free(memory->scratch);
+    memory->scratch = NULL;
     memory->capacity = 0U;
     memory->head = 0U;
     memory->count = 0U;
@@ -214,15 +226,17 @@ int critter_memory_build_summary(const critter_memory_t *memory,
         return -1;
     }
 
+    if (memory->scratch == NULL)
+     {
+        return -1;
+     }
+
     count = memory->count;
 
     memset(summary, 0, sizeof(*summary));
 
-    temperatures = malloc(sizeof(*temperatures) * count);
-    if (temperatures == NULL)
-    {
-        return -1;
-    }
+    temperatures = memory->scratch;
+
 
     min_temp =
         memory->buffer[(memory->head + memory->capacity - count) %
@@ -297,6 +311,5 @@ int critter_memory_build_summary(const critter_memory_t *memory,
     summary->retained_ratio =
         (double)count / (double)memory->total_received_samples;
 
-    free(temperatures);
     return 0;
 }
