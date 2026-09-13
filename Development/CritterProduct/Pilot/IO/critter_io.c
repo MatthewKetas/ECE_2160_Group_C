@@ -270,7 +270,7 @@ static int critter_read_cpu_temperature(double *temperature_c)
  
     close(fd);
  
-    if (n <= 0)
+    if (n <= 0 || (size_t)n >= sizeof(buffer))
         return -1;
  
     buffer[n] = '\0';
@@ -292,7 +292,7 @@ static int critter_resolve_executable_directory(char *buffer, size_t buffer_size
         return -1;
 
     length = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1U);
-    if (length < 0)
+    if (length < 0 || (size_t)length >= sizeof(exe_path))
         return -1;
 
     exe_path[length] = '\0';
@@ -430,4 +430,197 @@ int critter_io_read_sample(critter_sample_t *sample)
     return 0;
 }
 
-fclose(file);
+int critter_io_save_sample(const critter_sample_t *sample)
+{
+    const char *env_path = getenv("CRITTER_DATA_FILE");
+    char path[4096];
+    char line[512];
+    int fd;
+    int written;
+    struct stat info;
+    const char *source_name;
+ 
+    if (sample == NULL)
+        return -1;
+ 
+    if (env_path != NULL && env_path[0] != '\0')
+    {
+        snprintf(path, sizeof(path), "%s", env_path);
+    }
+    else
+    {
+        if (critter_resolve_runtime_data_path(path, sizeof(path)) != 0)
+            return -1;
+        if (critter_ensure_runtime_data_directory() != 0)
+            return -1;
+    }
+ 
+    fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd < 0)
+        return -1;
+ 
+    if (fstat(fd, &info) == 0 && info.st_size == 0)
+    {
+        static const char header[] =
+            "timestamp_s,temperature_c,humidity_percent,pressure_hpa,source,has_humidity,has_pressure\n";
+        if (critter_write_all(fd, header, sizeof(header) - 1U) != 0)
+        {
+            close(fd);
+            return -1;
+        }
+    }
+ 
+    switch (sample->source)
+    {
+        case TEMPERATURE_SOURCE_SENSE_HAT:
+            source_name = "sense_hat";
+            break;
+        case TEMPERATURE_SOURCE_DATA:
+            source_name = "data";
+            break;
+        case TEMPERATURE_SOURCE_CPU:
+            source_name = "cpu";
+            break;
+        default:
+            source_name = "unknown";
+            break;
+    }
+ 
+    written = snprintf(line, sizeof(line),
+                       "%.6f,%.6f,%.6f,%.6f,%s,%d,%d\n",
+                       sample->timestamp_s,
+                       sample->temperature_c,
+                       sample->humidity_percent,
+                       sample->pressure_hpa,
+                       source_name,
+                       sample->has_humidity ? 1 : 0,
+                       sample->has_pressure ? 1 : 0);
+ 
+    if (written < 0 || (size_t)written >= sizeof(line))
+    {
+        close(fd);
+        return -1;
+    }
+ 
+    if (critter_write_all(fd, line, (size_t)written) != 0)
+    {
+        close(fd);
+        return -1;
+    }
+ 
+    close(fd);
+    return 0;
+}
+ 
+int critter_io_save_metrics(const critter_window_summary_t *summary,
+                           const critter_analysis_result_t *analysis,
+                           size_t reads_attempted,
+                           size_t valid_samples,
+                           size_t rejected_samples,
+                           size_t outlier_count,
+                           double sample_rate_hz)
+{
+    const char *env_path = getenv("CRITTER_METRICS_FILE");
+    char path[4096];
+    char line[1024];
+    int fd;
+    int written;
+    struct stat info;
+    const char *source_name;
+ 
+    if (summary == NULL || analysis == NULL)
+        return -1;
+ 
+    if (env_path != NULL && env_path[0] != '\0')
+    {
+        snprintf(path, sizeof(path), "%s", env_path);
+    }
+    else
+    {
+        if (critter_resolve_runtime_data_path(path, sizeof(path)) != 0)
+            return -1;
+        if (critter_ensure_runtime_data_directory() != 0)
+            return -1;
+ 
+        if (strrchr(path, '/') != NULL)
+        {
+            char *last_slash = strrchr(path, '/');
+            if (last_slash != NULL)
+            {
+                *(last_slash + 1) = '\0';
+            }
+        }
+        snprintf(path + strlen(path), sizeof(path) - strlen(path), "collection_metrics.csv");
+    }
+ 
+    fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd < 0)
+        return -1;
+ 
+    if (fstat(fd, &info) == 0 && info.st_size == 0)
+    {
+        static const char header[] =
+            "timestamp_s,reads_attempted,valid_samples,rejected_samples,outlier_count,sample_rate_hz,retained_ratio,summary_count,min_temperature_c,max_temperature_c,mean_temperature_c,median_temperature_c,stddev_temperature_c,source,current_temperature_c,predicted_temperature_c,trend_c_per_s,rate_of_change_c_per_s,likely_hvac_active,likely_heating,likely_cooling,stable\n";
+        if (critter_write_all(fd, header, sizeof(header) - 1U) != 0)
+        {
+            close(fd);
+            return -1;
+        }
+    }
+ 
+    switch (summary->source)
+    {
+        case TEMPERATURE_SOURCE_SENSE_HAT:
+            source_name = "sense_hat";
+            break;
+        case TEMPERATURE_SOURCE_DATA:
+            source_name = "data";
+            break;
+        case TEMPERATURE_SOURCE_CPU:
+            source_name = "cpu";
+            break;
+        default:
+            source_name = "unknown";
+            break;
+    }
+ 
+    written = snprintf(line, sizeof(line),
+            "%.6f,%zu,%zu,%zu,%zu,%.6f,%.6f,%zu,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%.6f,%.6f,%.6f,%.6f,%d,%d,%d,%d\n",
+            analysis->analysis_timestamp_s,
+            reads_attempted,
+            valid_samples,
+            rejected_samples,
+            outlier_count,
+            sample_rate_hz,
+            summary->retained_ratio,
+            summary->sample_count,
+            summary->min_temperature_c,
+            summary->max_temperature_c,
+            summary->mean_temperature_c,
+            summary->median_temperature_c,
+            summary->stddev_temperature_c,
+            source_name,
+            analysis->current_temperature_c,
+            analysis->predicted_temperature_c,
+            analysis->trend_c_per_s,
+            analysis->rate_of_change_c_per_s,
+            analysis->likely_hvac_active ? 1 : 0,
+            analysis->likely_heating ? 1 : 0,
+            analysis->likely_cooling ? 1 : 0,
+            analysis->stable ? 1 : 0);
+ 
+    if (written < 0 || (size_t)written >= sizeof(line))
+    {
+        close(fd);
+        return -1;
+    }
+ 
+    if (critter_write_all(fd, line, (size_t)written) != 0)
+    {
+        close(fd);
+        return -1;
+    }
+ 
+    close(fd);
+    return 0;
+}
