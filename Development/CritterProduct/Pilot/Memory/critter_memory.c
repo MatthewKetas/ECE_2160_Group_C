@@ -33,7 +33,7 @@ static double critter_median(double *values, size_t count)
     size_t j;
     double temp;
 
-    if (count == 0)
+    if (values == NULL || count == 0U)
         return 0.0;
 
     for (i = 0; (i < count) && (i < CRITTER_MEMORY_MAX_SAMPLES); ++i)
@@ -49,10 +49,10 @@ static double critter_median(double *values, size_t count)
         }
     }
 
-    if (count % 2 == 0)
-        return (values[count / 2 - 1] + values[count / 2]) / 2.0;
+    if ((count % 2U) == 0U)
+        return (values[(count / 2U) - 1U] + values[count / 2U]) / 2.0;
 
-    return values[count / 2];
+    return values[count / 2U];
 }
 
 static double critter_stddev(const double *values, size_t count, double mean)
@@ -60,7 +60,7 @@ static double critter_stddev(const double *values, size_t count, double mean)
     double variance = 0.0;
     size_t i;
 
-    if (count == 0)
+    if (values == NULL || count == 0U)
         return 0.0;
 
     for (i = 0; (i < count) && (i < CRITTER_MEMORY_MAX_SAMPLES); ++i)
@@ -108,7 +108,6 @@ static int critter_detect_outlier(const critter_memory_t *memory, const critter_
     if (memory->scratch == NULL)
         return 0;
 
-
     valid_count = memory->count;
     if (valid_count < 3U)
         return 0;
@@ -143,22 +142,8 @@ int critter_memory_init(critter_memory_t *memory, size_t capacity)
     if (memory == NULL || capacity == 0U || capacity > CRITTER_MEMORY_MAX_SAMPLES)
         return -1;
 
-    memset(memory, 0, sizeof(*memory));
+    (void)memset(memory, 0, sizeof(*memory));
     memory->capacity = capacity;
-    memory->buffer = (critter_sample_t *)calloc(capacity, sizeof(critter_sample_t));
-    if (memory->buffer == NULL)
-        return -1;
-
-    memory->scratch = (double *)calloc(capacity, sizeof(double));
-    if (memory->scratch == NULL)
-    {
-        free(memory->buffer);
-        memory->buffer = NULL;
-        return -1;
-
-
-    }
-
     return 0;
 }
 
@@ -167,13 +152,7 @@ void critter_memory_free(critter_memory_t *memory)
     if (memory == NULL)
         return;
 
-    free(memory->buffer);
-    memory->buffer = NULL;
-    free(memory->scratch);
-    memory->scratch = NULL;
-    memory->capacity = 0U;
-    memory->head = 0U;
-    memory->count = 0U;
+    (void)memset(memory, 0, sizeof(*memory));
 }
 
 int critter_memory_add_sample(critter_memory_t *memory, const critter_sample_t *sample)
@@ -193,7 +172,7 @@ int critter_memory_add_sample(critter_memory_t *memory, const critter_sample_t *
 
     memory->total_valid_samples += 1U;
     is_outlier = critter_detect_outlier(memory, sample);
-    if (is_outlier)
+    if (is_outlier != 0)
     {
         memory->total_outliers += 1U;
         return 0;
@@ -227,16 +206,15 @@ int critter_memory_build_summary(const critter_memory_t *memory,
     }
 
     if (memory->scratch == NULL)
-     {
+    {
         return -1;
-     }
+    }
 
     count = memory->count;
 
-    memset(summary, 0, sizeof(*summary));
+    (void)memset(summary, 0, sizeof(*summary));
 
     temperatures = memory->scratch;
-
 
     min_temp =
         memory->buffer[(memory->head + memory->capacity - count) %
@@ -308,6 +286,7 @@ int critter_memory_build_summary(const critter_memory_t *memory,
         memory->buffer[(memory->head + memory->capacity - 1U) %
                        memory->capacity].temperature_c;
 
+    
     summary->retained_ratio =
         (double)count / (double)memory->total_received_samples;
 
