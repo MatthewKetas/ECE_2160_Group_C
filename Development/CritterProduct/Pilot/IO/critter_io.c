@@ -3,6 +3,7 @@
 #include "critter_io.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <math.h>
 #include <stdbool.h>
@@ -14,11 +15,114 @@
 #include <time.h>
 #include <unistd.h>
 
+
+
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
 
 #include "../../../../Utils/SenseHat/sense_hat_environment.h"
+
+
+
+static int critter_write_all(int fd, const char *data, size_t length)
+{
+    size_t written = 0U;
+ 
+    while (written < length)
+    {
+        ssize_t n = write(fd, data + written, length - written);
+        if (n < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            return -1;
+        }
+        written += (size_t)n;
+    }
+ 
+    return 0;
+}
+typedef struct
+{
+    int    fd;
+    char   chunk[512];
+    size_t chunk_len;
+    size_t chunk_pos;
+    int    at_eof;
+} critter_line_reader_t;
+ 
+static void critter_line_reader_open(critter_line_reader_t *reader, int fd)
+{
+    reader->fd = fd;
+    reader->chunk_len = 0U;
+    reader->chunk_pos = 0U;
+    reader->at_eof = 0;
+}
+ 
+
+static int critter_line_reader_next(critter_line_reader_t *reader, char *out, size_t out_size)
+{
+    size_t out_len = 0U;
+    int saw_any = 0;
+ 
+    if (reader == NULL || out == NULL || out_size == 0U)
+        return -1;
+ 
+    for (;;)
+    {
+        if (reader->chunk_pos >= reader->chunk_len)
+        {
+            ssize_t n;
+ 
+            if (reader->at_eof)
+                break;
+ 
+            n = read(reader->fd, reader->chunk, sizeof(reader->chunk));
+            if (n < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+                return -1;
+            }
+            if (n == 0)
+            {
+                reader->at_eof = 1;
+                break;
+            }
+ 
+            reader->chunk_len = (size_t)n;
+            reader->chunk_pos = 0U;
+        }
+ 
+        while (reader->chunk_pos < reader->chunk_len)
+        {
+            char c = reader->chunk[reader->chunk_pos];
+            reader->chunk_pos += 1U;
+            saw_any = 1;
+ 
+            if (c == '\n')
+            {
+                out[out_len] = '\0';
+                return 1;
+            }
+ 
+            if (out_len + 1U < out_size)
+            {
+                out[out_len] = c;
+                out_len += 1U;
+            }
+        }
+    }
+ 
+    if (saw_any)
+    {
+        out[out_len] = '\0';
+        return 1;
+    }
+ 
+    return 0;
+}
 
 static int critter_read_sense_hat_environment(double *temperature_c,
                                               double *humidity_percent,
@@ -68,9 +172,11 @@ static int critter_read_data_temperature(double *temperature_c)
     static bool initialized = false;
     static double last_value = 20.0;
     const char *path = getenv("CRITTER_DATA_FILE");
-    FILE *file;
+    int fd;
     double value = 0.0;
-    char buffer[256];
+    char line[256];
+    critter_line_reader_t reader;
+    int status;
 
     if (temperature_c == NULL)
         return -1;
@@ -80,8 +186,8 @@ static int critter_read_data_temperature(double *temperature_c)
         path = "Development/Data/temperature_samples.csv";
     }
 
-    file = fopen(path, "r");
-    if (file == NULL)
+    fd = open(path, O_RDONLY);
+    if (fd < 0)
     {
         if (initialized)
         {
@@ -91,18 +197,17 @@ static int critter_read_data_temperature(double *temperature_c)
         return -1;
     }
 
-    while (fgets(buffer, sizeof(buffer), file) != NULL)
-    {
-        char *newline = strchr(buffer, '\n');
-        if (newline != NULL)
-            *newline = '\0';
 
-        if (strchr(buffer, ',') == NULL)
+    critter_line_reader_open(&reader, fd);
+
+     while ((status = critter_line_reader_next(&reader, line, sizeof(line))) == 1)
+     {
+        if (strchr(line, ',') == NULL)
             continue;
 
-        if (sscanf(buffer, "%*[^,],%lf", &value) == 1)
+        if (sscanf(line, "%*[^,],%lf", &value) == 1)
         {
-            fclose(file);
+            close(fd);
             initialized = true;
             last_value = value;
             *temperature_c = value;
@@ -110,7 +215,7 @@ static int critter_read_data_temperature(double *temperature_c)
         }
     }
 
-    fclose(file);
+    close(fd);
     if (initialized)
     {
         *temperature_c = last_value;
@@ -122,23 +227,34 @@ static int critter_read_data_temperature(double *temperature_c)
 
 static int critter_read_cpu_temperature(double *temperature_c)
 {
-    FILE *file;
-    int raw_millicelsius;
-
+    int fd;
+    int raw_millicelsius = 0;
+    char buffer[64];
+    ssize_t n;
+ 
     if (temperature_c == NULL)
         return -1;
-
-    file = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
-    if (file == NULL)
+ 
+    fd = open("/sys/class/thermal/thermal_zone0/temp", O_RDONLY);
+    if (fd < 0)
         return -1;
-
-    if (fscanf(file, "%d", &raw_millicelsius) != 1)
+ 
+    do
     {
-        fclose(file);
-        return -1;
+        n = read(fd, buffer, sizeof(buffer) - 1U);
     }
-
-    fclose(file);
+    while (n < 0 && errno == EINTR);
+ 
+    close(fd);
+ 
+    if (n <= 0)
+        return -1;
+ 
+    buffer[n] = '\0';
+ 
+    if (sscanf(buffer, "%d", &raw_millicelsius) != 1)
+        return -1;
+ 
     *temperature_c = (double)raw_millicelsius / 1000.0;
     return 0;
 }
@@ -291,157 +407,4 @@ int critter_io_read_sample(critter_sample_t *sample)
     return 0;
 }
 
-int critter_io_save_sample(const critter_sample_t *sample)
-{
-    const char *env_path = getenv("CRITTER_DATA_FILE");
-    char path[4096];
-    FILE *file;
-    const char *source_name;
-
-    if (sample == NULL)
-        return -1;
-
-    if (env_path != NULL && env_path[0] != '\0')
-    {
-        snprintf(path, sizeof(path), "%s", env_path);
-    }
-    else
-    {
-        if (critter_resolve_runtime_data_path(path, sizeof(path)) != 0)
-            return -1;
-        if (critter_ensure_runtime_data_directory() != 0)
-            return -1;
-    }
-
-    file = fopen(path, "a");
-    if (file == NULL)
-        return -1;
-
-    if (ftell(file) == 0L)
-    {
-        fprintf(file,
-                "timestamp_s,temperature_c,humidity_percent,pressure_hpa,source,has_humidity,has_pressure\n");
-    }
-
-    switch (sample->source)
-    {
-        case TEMPERATURE_SOURCE_SENSE_HAT:
-            source_name = "sense_hat";
-            break;
-        case TEMPERATURE_SOURCE_DATA:
-            source_name = "data";
-            break;
-        case TEMPERATURE_SOURCE_CPU:
-            source_name = "cpu";
-            break;
-        default:
-            source_name = "unknown";
-            break;
-    }
-
-    fprintf(file,
-            "%.6f,%.6f,%.6f,%.6f,%s,%d,%d\n",
-            sample->timestamp_s,
-            sample->temperature_c,
-            sample->humidity_percent,
-            sample->pressure_hpa,
-            source_name,
-            sample->has_humidity ? 1 : 0,
-            sample->has_pressure ? 1 : 0);
-
-    fclose(file);
-    return 0;
-}
-
-int critter_io_save_metrics(const critter_window_summary_t *summary,
-                           const critter_analysis_result_t *analysis,
-                           size_t reads_attempted,
-                           size_t valid_samples,
-                           size_t rejected_samples,
-                           size_t outlier_count,
-                           double sample_rate_hz)
-{
-    const char *env_path = getenv("CRITTER_METRICS_FILE");
-    char path[4096];
-    FILE *file;
-    const char *source_name;
-
-    if (summary == NULL || analysis == NULL)
-        return -1;
-
-    if (env_path != NULL && env_path[0] != '\0')
-    {
-        snprintf(path, sizeof(path), "%s", env_path);
-    }
-    else
-    {
-        if (critter_resolve_runtime_data_path(path, sizeof(path)) != 0)
-            return -1;
-        if (critter_ensure_runtime_data_directory() != 0)
-            return -1;
-
-        if (strrchr(path, '/') != NULL)
-        {
-            char *last_slash = strrchr(path, '/');
-            if (last_slash != NULL)
-            {
-                *(last_slash + 1) = '\0';
-            }
-        }
-        snprintf(path + strlen(path), sizeof(path) - strlen(path), "collection_metrics.csv");
-    }
-
-    file = fopen(path, "a");
-    if (file == NULL)
-        return -1;
-
-    if (ftell(file) == 0L)
-    {
-        fprintf(file,
-                "timestamp_s,reads_attempted,valid_samples,rejected_samples,outlier_count,sample_rate_hz,retained_ratio,summary_count,min_temperature_c,max_temperature_c,mean_temperature_c,median_temperature_c,stddev_temperature_c,source,current_temperature_c,predicted_temperature_c,trend_c_per_s,rate_of_change_c_per_s,likely_hvac_active,likely_heating,likely_cooling,stable\n");
-    }
-
-    switch (summary->source)
-    {
-        case TEMPERATURE_SOURCE_SENSE_HAT:
-            source_name = "sense_hat";
-            break;
-        case TEMPERATURE_SOURCE_DATA:
-            source_name = "data";
-            break;
-        case TEMPERATURE_SOURCE_CPU:
-            source_name = "cpu";
-            break;
-        default:
-            source_name = "unknown";
-            break;
-    }
-
-    fprintf(file,
-            "%.6f,%zu,%zu,%zu,%zu,%.6f,%.6f,%zu,%.6f,%.6f,%.6f,%.6f,%.6f,%s,%.6f,%.6f,%.6f,%.6f,%d,%d,%d,%d\n",
-            analysis->analysis_timestamp_s,
-            reads_attempted,
-            valid_samples,
-            rejected_samples,
-            outlier_count,
-            sample_rate_hz,
-            summary->retained_ratio,
-            summary->sample_count,
-            summary->min_temperature_c,
-            summary->max_temperature_c,
-            summary->mean_temperature_c,
-            summary->median_temperature_c,
-            summary->stddev_temperature_c,
-            source_name,
-            analysis->current_temperature_c,
-            analysis->predicted_temperature_c,
-            analysis->trend_c_per_s,
-            analysis->rate_of_change_c_per_s,
-            analysis->likely_hvac_active ? 1 : 0,
-            analysis->likely_heating ? 1 : 0,
-            analysis->likely_cooling ? 1 : 0,
-            analysis->stable ? 1 : 0);
-
-    fclose(file);
-    return 0;
-}
+fclose(file);
