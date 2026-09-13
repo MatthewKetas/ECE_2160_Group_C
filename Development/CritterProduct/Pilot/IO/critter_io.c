@@ -21,6 +21,13 @@
 #define PATH_MAX 4096
 #endif
 
+
+
+#define CRITTER_IO_MAX_IO_ITERS      4096U   
+#define CRITTER_IO_MAX_READ_STEPS    1000000U  
+#define CRITTER_IO_MAX_LINES         1000000U  
+#define CRITTER_IO_MAX_EINTR_RETRIES 1024U   
+
 #include "../../../../Utils/SenseHat/sense_hat_environment.h"
 
 
@@ -28,8 +35,9 @@
 static int critter_write_all(int fd, const char *data, size_t length)
 {
     size_t written = 0U;
+    size_t guard;
  
-    while (written < length)
+    for (guard = 0U; (written < length) && (guard < CRITTER_IO_MAX_IO_ITERS); ++guard)
     {
         ssize_t n = write(fd, data + written, length - written);
         if (n < 0)
@@ -41,8 +49,11 @@ static int critter_write_all(int fd, const char *data, size_t length)
         written += (size_t)n;
     }
  
-    return 0;
+    return (written == length) ? 0 : -1;
 }
+
+
+
 typedef struct
 {
     int    fd;
@@ -65,12 +76,15 @@ static int critter_line_reader_next(critter_line_reader_t *reader, char *out, si
 {
     size_t out_len = 0U;
     int saw_any = 0;
+    size_t step;
  
     if (reader == NULL || out == NULL || out_size == 0U)
         return -1;
  
-    for (;;)
+    for (step = 0U; step < CRITTER_IO_MAX_READ_STEPS; ++step)
     {
+        size_t scan;
+ 
         if (reader->chunk_pos >= reader->chunk_len)
         {
             ssize_t n;
@@ -95,7 +109,9 @@ static int critter_line_reader_next(critter_line_reader_t *reader, char *out, si
             reader->chunk_pos = 0U;
         }
  
-        while (reader->chunk_pos < reader->chunk_len)
+        for (scan = 0U;
+             (reader->chunk_pos < reader->chunk_len) && (scan < sizeof(reader->chunk));
+             ++scan)
         {
             char c = reader->chunk[reader->chunk_pos];
             reader->chunk_pos += 1U;
@@ -177,15 +193,16 @@ static int critter_read_data_temperature(double *temperature_c)
     char line[256];
     critter_line_reader_t reader;
     int status;
-
+    size_t line_index;
+ 
     if (temperature_c == NULL)
         return -1;
-
+ 
     if (path == NULL || path[0] == '\0')
     {
         path = "Development/Data/temperature_samples.csv";
     }
-
+ 
     fd = open(path, O_RDONLY);
     if (fd < 0)
     {
@@ -196,15 +213,18 @@ static int critter_read_data_temperature(double *temperature_c)
         }
         return -1;
     }
-
-
+ 
     critter_line_reader_open(&reader, fd);
-
-     while ((status = critter_line_reader_next(&reader, line, sizeof(line))) == 1)
-     {
+ 
+    for (line_index = 0U; line_index < CRITTER_IO_MAX_LINES; ++line_index)
+    {
+        status = critter_line_reader_next(&reader, line, sizeof(line));
+        if (status != 1)
+            break;
+ 
         if (strchr(line, ',') == NULL)
             continue;
-
+ 
         if (sscanf(line, "%*[^,],%lf", &value) == 1)
         {
             close(fd);
@@ -214,14 +234,15 @@ static int critter_read_data_temperature(double *temperature_c)
             return 0;
         }
     }
-
+ 
     close(fd);
+ 
     if (initialized)
     {
         *temperature_c = last_value;
         return 0;
     }
-
+ 
     return -1;
 }
 
@@ -230,7 +251,8 @@ static int critter_read_cpu_temperature(double *temperature_c)
     int fd;
     int raw_millicelsius = 0;
     char buffer[64];
-    ssize_t n;
+    ssize_t n = -1;
+    size_t retry;
  
     if (temperature_c == NULL)
         return -1;
@@ -239,11 +261,12 @@ static int critter_read_cpu_temperature(double *temperature_c)
     if (fd < 0)
         return -1;
  
-    do
+    for (retry = 0U; retry < CRITTER_IO_MAX_EINTR_RETRIES; ++retry)
     {
         n = read(fd, buffer, sizeof(buffer) - 1U);
+        if (!(n < 0 && errno == EINTR))
+            break;
     }
-    while (n < 0 && errno == EINTR);
  
     close(fd);
  
