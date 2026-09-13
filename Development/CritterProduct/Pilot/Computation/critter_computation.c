@@ -2,6 +2,21 @@
 
 #include <math.h>
 
+
+
+_Static_assert(sizeof(((critter_analysis_result_t *)0)->analysis_timestamp_s)    >= sizeof(double), "analysis_timestamp_s narrower than double (FLP34-C)");
+_Static_assert(sizeof(((critter_analysis_result_t *)0)->current_temperature_c)   >= sizeof(double), "current_temperature_c narrower than double (FLP34-C)");
+_Static_assert(sizeof(((critter_analysis_result_t *)0)->prediction_horizon_s)    >= sizeof(double), "prediction_horizon_s narrower than double (FLP34-C)");
+_Static_assert(sizeof(((critter_analysis_result_t *)0)->trend_c_per_s)           >= sizeof(double), "trend_c_per_s narrower than double (FLP34-C)");
+_Static_assert(sizeof(((critter_analysis_result_t *)0)->rate_of_change_c_per_s)  >= sizeof(double), "rate_of_change_c_per_s narrower than double (FLP34-C)");
+_Static_assert(sizeof(((critter_analysis_result_t *)0)->slope_c_per_s)           >= sizeof(double), "slope_c_per_s narrower than double (FLP34-C)");
+_Static_assert(sizeof(((critter_analysis_result_t *)0)->intercept_c)             >= sizeof(double), "intercept_c narrower than double (FLP34-C)");
+_Static_assert(sizeof(((critter_analysis_result_t *)0)->variance_c)              >= sizeof(double), "variance_c narrower than double (FLP34-C)");
+_Static_assert(sizeof(((critter_analysis_result_t *)0)->recent_delta_c)          >= sizeof(double), "recent_delta_c narrower than double (FLP34-C)");
+_Static_assert(sizeof(((critter_analysis_result_t *)0)->predicted_temperature_c) >= sizeof(double), "predicted_temperature_c narrower than double (FLP34-C)");
+
+
+
 int critter_compute_analysis(const critter_window_summary_t *summary,
                             double prediction_horizon_s,
                             critter_analysis_result_t *result)
