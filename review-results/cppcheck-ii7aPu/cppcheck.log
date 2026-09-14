@@ -1,0 +1,45 @@
+Checking Development/CritterProduct/Pilot/main.c ...
+Development/CritterProduct/Pilot/main.c:0:0: warning: Limiting analysis of branches. Use --check-level=exhaustive to analyze all branches. [normalCheckLevelMaxBranches]
+
+^
+1/5 files checked 16% done
+Checking Development/CritterProduct/Pilot/IO/critter_io.c ...
+Development/CritterProduct/Pilot/IO/critter_io.c:0:0: warning: Limiting analysis of branches. Use --check-level=exhaustive to analyze all branches. [normalCheckLevelMaxBranches]
+
+^
+2/5 files checked 51% done
+Checking Development/CritterProduct/Pilot/Memory/critter_memory.c ...
+Development/CritterProduct/Pilot/Memory/critter_memory.c:0:0: warning: Limiting analysis of branches. Use --check-level=exhaustive to analyze all branches. [normalCheckLevelMaxBranches]
+
+^
+Development/CritterProduct/Pilot/Memory/critter_memory.c:34:12: warning: The scope of the variable 'temp' can be reduced. [variableScope]
+    double temp;
+           ^
+Development/CritterProduct/Pilot/Memory/critter_memory.c:205:12: warning: The scope of the variable 'index' can be reduced. [variableScope]
+    size_t index;
+           ^
+Development/CritterProduct/Pilot/Memory/critter_memory.c:58:38: warning: Parameter 'values' can be declared as pointer to const [constParameterPointer]
+static double critter_stddev(double *values, size_t count, double mean)
+                                     ^
+3/5 files checked 71% done
+Checking Development/CritterProduct/Pilot/Computation/critter_computation.c ...
+4/5 files checked 76% done
+Checking Utils/SenseHat/sense_hat_environment.c ...
+Utils/SenseHat/sense_hat_environment.c:130:64: warning: Parameter 'sensor' can be declared as pointer to const [constParameterPointer]
+int sense_hat_environment_set_hts_odr(sense_hat_environment_t *sensor, sense_hat_hts_odr_t odr)
+                                                               ^
+Utils/SenseHat/sense_hat_environment.c:139:69: warning: Parameter 'sensor' can be declared as pointer to const [constParameterPointer]
+int sense_hat_environment_set_pressure_odr(sense_hat_environment_t *sensor, sense_hat_pressure_odr_t odr)
+                                                                    ^
+Utils/SenseHat/sense_hat_environment.c:201:69: warning: Parameter 'sensor' can be declared as pointer to const [constParameterPointer]
+int sense_hat_environment_read_temperature(sense_hat_environment_t *sensor, double *temperature_c)
+                                                                    ^
+Utils/SenseHat/sense_hat_environment.c:217:66: warning: Parameter 'sensor' can be declared as pointer to const [constParameterPointer]
+int sense_hat_environment_read_humidity(sense_hat_environment_t *sensor, double *humidity_percent)
+                                                                 ^
+Utils/SenseHat/sense_hat_environment.c:239:66: warning: Parameter 'sensor' can be declared as pointer to const [constParameterPointer]
+int sense_hat_environment_read_pressure(sense_hat_environment_t *sensor, double *pressure_hpa)
+                                                                 ^
+5/5 files checked 100% done
+nofile:0:0: warning: Active checkers: 112/186 (use --checkers-report=<filename> to see details) [checkersReport]
+
