@@ -1,0 +1,26 @@
+[  4%] Building C object CMakeFiles/Pilot_core.dir/Computation/critter_computation.c.o
+[  8%] Building C object CMakeFiles/Pilot_core.dir/Users/matthewketas/Desktop/University_of_Pittsburgh/Senior_Year/7th_Semester/Embedded_Systems/ECE_2160_Group_C/Utils/SenseHat/sense_hat_environment.c.o
+[ 12%] Linking C static library libPilot_core.a
+[ 20%] Built target Pilot_core
+[ 24%] Linking C executable Pilot
+[ 28%] Built target Pilot
+[ 32%] Linking C executable test_memory_computation
+[ 36%] Built target test_memory_computation
+[ 40%] Linking C executable test_data_fallback
+[ 44%] Built target test_data_fallback
+[ 48%] Linking C executable test_internal_temperature
+[ 52%] Built target test_internal_temperature
+[ 56%] Linking C executable test_io_get_temperature_fallback
+[ 60%] Built target test_io_get_temperature_fallback
+[ 64%] Linking C executable test_io_get_temperature_sources
+[ 68%] Built target test_io_get_temperature_sources
+[ 72%] Building C object CMakeFiles/test_safety_regressions.dir/tests/test_safety_regressions.c.o
+[ 76%] Linking C executable test_safety_regressions
+[ 76%] Built target test_safety_regressions
+[ 80%] Linking C executable test_io_failures
+[ 84%] Built target test_io_failures
+[ 88%] Building C object CMakeFiles/test_sensor_decoding.dir/tests/test_sensor_decoding.c.o
+[ 92%] Linking C executable test_sensor_decoding
+[ 92%] Built target test_sensor_decoding
+[ 96%] Linking C executable test_collection_failures
+[100%] Built target test_collection_failures

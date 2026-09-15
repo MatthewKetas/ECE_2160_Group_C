@@ -1,0 +1,14 @@
+Development/CritterProduct/Pilot/main.c
+exit=0
+
+Development/CritterProduct/Pilot/IO/critter_io.c
+exit=0
+
+Development/CritterProduct/Pilot/Memory/critter_memory.c
+exit=0
+
+Development/CritterProduct/Pilot/Computation/critter_computation.c
+exit=0
+
+Utils/SenseHat/sense_hat_environment.c
+exit=0

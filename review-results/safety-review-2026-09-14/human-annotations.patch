@@ -1,0 +1,127 @@
+diff --git a/Development/CritterProduct/Pilot/IO/critter_io.c b/Development/CritterProduct/Pilot/IO/critter_io.c
+index 26cf797..8b25007 100644
+--- a/Development/CritterProduct/Pilot/IO/critter_io.c
++++ b/Development/CritterProduct/Pilot/IO/critter_io.c
+@@ -67,7 +67,7 @@ static int critter_read_data_temperature(double *temperature_c)
+ {
+     static bool initialized = false;
+     static double last_value = 20.0;
+-    const char *path = getenv("CRITTER_DATA_FILE");
++    const char *path = getenv("CRITTER_DATA_FILE"); // EXP33-C MKETAS - SHOULD CHECK FOR NULL POINTER
+     FILE *file;
+     double value = 0.0;
+     char buffer[256];
+@@ -91,7 +91,7 @@ static int critter_read_data_temperature(double *temperature_c)
+         return -1;
+     }
+ 
+-    while (fgets(buffer, sizeof(buffer), file) != NULL)
++    while (fgets(buffer, sizeof(buffer), file) != NULL) // NASA 10 #2 MKETAS - NEEDS AN UPPER LIMIT
+     {
+         char *newline = strchr(buffer, '\n');
+         if (newline != NULL)
+@@ -110,7 +110,7 @@ static int critter_read_data_temperature(double *temperature_c)
+         }
+     }
+ 
+-    fclose(file);
++    fclose(file); // EXP33-C MKETAS - SHOULD CHECK THAT THE FUNCTION RETURNS 0 FOR A SUCCESSFULLY CLOSED STREAM
+     if (initialized)
+     {
+         *temperature_c = last_value;
+@@ -163,7 +163,7 @@ static int critter_resolve_executable_directory(char *buffer, size_t buffer_size
+ 
+     *slash = '\0';
+ 
+-    if (snprintf(buffer, buffer_size, "%s", exe_path) >= (int)buffer_size)
++    if (snprintf(buffer, buffer_size, "%s", exe_path) >= (int)buffer_size) // EXP33-C MKETAS - SHOULD CHECK FOR NULL POINTER OR BAD ARGUMENTS IN ADDITION TO BUFFER SIZE CHECK
+         return -1;
+ 
+     return 0;
+@@ -196,7 +196,7 @@ static int critter_ensure_runtime_data_directory(void)
+     if (critter_resolve_executable_directory(app_dir, sizeof(app_dir)) != 0)
+         return -1;
+ 
+-    if (snprintf(data_dir, sizeof(data_dir), "%s/Data", app_dir) >= (int)sizeof(data_dir))
++    if (snprintf(data_dir, sizeof(data_dir), "%s/Data", app_dir) >= (int)sizeof(data_dir)) // EXP33-C MKETAS - SHOULD CHECK FOR NULL POINTER OR BAD ARGUMENTS
+         return -1;
+ 
+     if (stat(data_dir, &info) != 0)
+@@ -309,7 +309,7 @@ int critter_io_save_sample(const critter_sample_t *sample)
+ 
+     if (env_path != NULL && env_path[0] != '\0')
+     {
+-        snprintf(path, sizeof(path), "%s", env_path);
++        snprintf(path, sizeof(path), "%s", env_path); // EXP33-C MKETAS - SHOULD CHECK FOR NULL POINTER OR BAD ARGUMENTS
+     }
+     else
+     {
+@@ -323,6 +323,7 @@ int critter_io_save_sample(const critter_sample_t *sample)
+     if (file == NULL)
+         return -1;
+ 
++    // EXP33-C MKETAS - SHOULD CHECK FOR NULL POINTER OR BAD ARGUMENTS IN ADDITION TO BUFFER SIZE CHECK FOR BOTH FUNCTIONS BELOW
+     if (ftell(file) == 0L)
+     {
+         fprintf(file,
+@@ -345,6 +346,7 @@ int critter_io_save_sample(const critter_sample_t *sample)
+             break;
+     }
+ 
++    // EXP33-C MKETAS - SHOULD CHECK FOR NULL POINTER OR BAD ARGUMENTS IN ADDITION TO BUFFER SIZE CHECK FOR BOTH FILE FUNCTIONS BELOW
+     fprintf(file,
+             "%.6f,%.6f,%.6f,%.6f,%s,%d,%d\n",
+             sample->timestamp_s,
+@@ -377,7 +379,7 @@ int critter_io_save_metrics(const critter_window_summary_t *summary,
+ 
+     if (env_path != NULL && env_path[0] != '\0')
+     {
+-        snprintf(path, sizeof(path), "%s", env_path);
++        snprintf(path, sizeof(path), "%s", env_path); // EXP33-C MKETAS - SHOULD CHECK FOR NULL POINTER OR BAD ARGUMENTS IN ADDITION TO BUFFER SIZE CHECK
+     }
+     else
+     {
+@@ -394,6 +396,7 @@ int critter_io_save_metrics(const critter_window_summary_t *summary,
+                 *(last_slash + 1) = '\0';
+             }
+         }
++        // EXP33-C MKETAS - SHOULD CHECK FOR NULL POINTER OR BAD ARGUMENTS IN ADDITION TO BUFFER SIZE CHECK FOR THE FILE FUNCTIONS BELOW
+         snprintf(path + strlen(path), sizeof(path) - strlen(path), "collection_metrics.csv");
+     }
+ 
+@@ -401,6 +404,7 @@ int critter_io_save_metrics(const critter_window_summary_t *summary,
+     if (file == NULL)
+         return -1;
+ 
++    // EXP33-C MKETAS - SHOULD CHECK FOR NULL POINTER OR BAD ARGUMENTS IN ADDITION TO BUFFER SIZE CHECK FOR BOTH FILE FUNCTIONS BELOW
+     if (ftell(file) == 0L)
+     {
+         fprintf(file,
+@@ -448,6 +452,6 @@ int critter_io_save_metrics(const critter_window_summary_t *summary,
+             analysis->likely_cooling ? 1 : 0,
+             analysis->stable ? 1 : 0);
+ 
+-    fclose(file);
++    fclose(file); // EXP33-C MKETAS - SHOULD CHECK FOR NULL POINTER OR BAD ARGUMENTS IN ADDITION TO BUFFER SIZE CHECK
+     return 0;
+ }
+diff --git a/Development/CritterProduct/Pilot/Memory/critter_memory.c b/Development/CritterProduct/Pilot/Memory/critter_memory.c
+index 8a9f0ff..0cb287e 100644
+--- a/Development/CritterProduct/Pilot/Memory/critter_memory.c
++++ b/Development/CritterProduct/Pilot/Memory/critter_memory.c
+@@ -109,6 +109,7 @@ static int critter_detect_outlier(const critter_memory_t *memory, const critter_
+     if (valid_count < 3U)
+         return 0;
+ 
++    // MEMORY ALLOCATED AFTER INITIALIZATION HERE
+     window_size = valid_count;
+     temperatures = (double *)malloc(sizeof(double) * window_size);
+     if (temperatures == NULL)
+@@ -207,6 +208,7 @@ int critter_memory_build_summary(const critter_memory_t *memory, critter_window_
+     if (memory == NULL || summary == NULL || memory->count == 0U)
+         return -1;
+ 
++    // MEMORY ALLOCATED AFTER INITIALIZATION
+     memset(summary, 0, sizeof(*summary));
+     count = memory->count;
+     temperatures = (double *)malloc(sizeof(double) * count);

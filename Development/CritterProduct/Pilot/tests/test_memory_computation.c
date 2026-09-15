@@ -25,7 +25,8 @@ int main(void)
 
     for (size_t i = 0; i < 6; ++i)
     {
-        critter_memory_add_sample(&memory, &samples[i]);
+        if (critter_memory_add_sample(&memory, &samples[i]) != 0)
+            return 1;
     }
 
     if (memory.total_valid_samples != 6)
@@ -66,6 +67,7 @@ int main(void)
         return 1;
     }
 
+    critter_memory_free(&memory);
     puts("critter pilot tests passed");
     return 0;
 }

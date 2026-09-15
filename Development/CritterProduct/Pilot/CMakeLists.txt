@@ -6,6 +6,15 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+# A24: Keep restrictive compiler diagnostics in the project configuration.
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wformat=2 -Werror)
+endif()
+if(APPLE)
+    # A15: Expose Darwin's no-follow open flags for host-only fallback tests.
+    add_compile_definitions(_DARWIN_C_SOURCE)
+endif()
+
 add_library(Pilot_core STATIC
     "Computation/critter_computation.c"
     "IO/critter_io.c"
@@ -67,3 +76,23 @@ add_test(NAME test_internal_temperature COMMAND test_internal_temperature)
 add_test(NAME test_io_get_temperature_fallback COMMAND test_io_get_temperature_fallback)
 add_test(NAME test_io_get_temperature_sources COMMAND test_io_get_temperature_sources)
 
+# A25: Hardware absence is a skip; fallback tests always get a known input.
+set_tests_properties(test_internal_temperature test_io_get_temperature_sources PROPERTIES SKIP_RETURN_CODE 77)
+set_tests_properties(test_io_get_temperature_fallback test_io_get_temperature_sources PROPERTIES
+    ENVIRONMENT "CRITTER_DATA_FILE=${CMAKE_CURRENT_SOURCE_DIR}/Data/temperature_samples.csv")
+
+add_executable(test_safety_regressions tests/test_safety_regressions.c)
+target_link_libraries(test_safety_regressions PRIVATE Pilot_core)
+add_test(NAME test_safety_regressions COMMAND test_safety_regressions)
+
+add_executable(test_io_failures tests/test_io_failures.c)
+target_link_libraries(test_io_failures PRIVATE Pilot_core)
+add_test(NAME test_io_failures COMMAND test_io_failures)
+
+add_executable(test_sensor_decoding tests/test_sensor_decoding.c)
+target_link_libraries(test_sensor_decoding PRIVATE Pilot_core)
+add_test(NAME test_sensor_decoding COMMAND test_sensor_decoding)
+
+add_executable(test_collection_failures tests/test_collection_failures.c)
+target_link_libraries(test_collection_failures PRIVATE Pilot_core)
+add_test(NAME test_collection_failures COMMAND test_collection_failures)

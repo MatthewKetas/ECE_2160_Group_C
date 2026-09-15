@@ -47,31 +47,31 @@ typedef struct
     int16_t h1_out;
 } sense_hat_environment_t;
 
-/* Initialize both Sense HAT environmental sensors on an I2C device such as /dev/i2c-1. */
+/* Initialize an unowned handle; close a live handle before reinitialization. */
 int sense_hat_environment_init(sense_hat_environment_t *sensor,
                                const char *i2c_device,
                                sense_hat_hts_odr_t hts_odr,
                                sense_hat_pressure_odr_t pressure_odr);
 
 /* Close the I2C descriptors and reset the utility state. */
-void sense_hat_environment_close(sense_hat_environment_t *sensor);
+int sense_hat_environment_close(sense_hat_environment_t *sensor);
 
 /* Change the continuous output data rate after initialization. */
-int sense_hat_environment_set_hts_odr(sense_hat_environment_t *sensor,
+int sense_hat_environment_set_hts_odr(const sense_hat_environment_t *sensor,
                                       sense_hat_hts_odr_t odr);
-int sense_hat_environment_set_pressure_odr(sense_hat_environment_t *sensor,
+int sense_hat_environment_set_pressure_odr(const sense_hat_environment_t *sensor,
                                            sense_hat_pressure_odr_t odr);
 
 /* Individual measurements. */
-int sense_hat_environment_read_temperature(sense_hat_environment_t *sensor,
+int sense_hat_environment_read_temperature(const sense_hat_environment_t *sensor,
                                            double *temperature_c);
-int sense_hat_environment_read_humidity(sense_hat_environment_t *sensor,
+int sense_hat_environment_read_humidity(const sense_hat_environment_t *sensor,
                                         double *humidity_percent);
-int sense_hat_environment_read_pressure(sense_hat_environment_t *sensor,
+int sense_hat_environment_read_pressure(const sense_hat_environment_t *sensor,
                                         double *pressure_hpa);
 
-/* Read temperature, humidity, and pressure into one structure. */
-int sense_hat_environment_read(sense_hat_environment_t *sensor,
+/* Required temperature; unavailable optional measurements are NAN. */
+int sense_hat_environment_read(const sense_hat_environment_t *sensor,
                                sense_hat_environment_reading_t *reading);
 
 #ifdef __cplusplus

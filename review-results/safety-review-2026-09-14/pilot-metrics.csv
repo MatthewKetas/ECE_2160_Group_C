@@ -1,0 +1,2 @@
+timestamp_s,reads_attempted,valid_samples,rejected_samples,outlier_count,sample_rate_hz,retained_ratio,summary_count,min_temperature_c,max_temperature_c,mean_temperature_c,median_temperature_c,stddev_temperature_c,source,current_temperature_c,predicted_temperature_c,trend_c_per_s,rate_of_change_c_per_s,likely_hvac_active,likely_heating,likely_cooling,stable
+1789425330.370305,577,564,13,0,9.611817,0.177305,100,40.250000,40.360549,40.308407,40.305275,0.022118,data,40.305275,40.412693,0.003581,0.003581,0,0,0,1

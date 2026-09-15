@@ -1,0 +1,27 @@
+Internal ctest changing into directory: /tmp/critter-safety-build
+Test project /tmp/critter-safety-build
+    Start 1: test_memory_computation
+1/9 Test #1: test_memory_computation ............   Passed    0.22 sec
+    Start 2: test_data_fallback
+2/9 Test #2: test_data_fallback .................   Passed    0.12 sec
+    Start 3: test_internal_temperature
+3/9 Test #3: test_internal_temperature ..........***Skipped   0.13 sec
+    Start 4: test_io_get_temperature_fallback
+4/9 Test #4: test_io_get_temperature_fallback ...   Passed    0.12 sec
+    Start 5: test_io_get_temperature_sources
+5/9 Test #5: test_io_get_temperature_sources ....   Passed    0.12 sec
+    Start 6: test_safety_regressions
+6/9 Test #6: test_safety_regressions ............   Passed    0.12 sec
+    Start 7: test_io_failures
+7/9 Test #7: test_io_failures ...................   Passed    0.12 sec
+    Start 8: test_sensor_decoding
+8/9 Test #8: test_sensor_decoding ...............   Passed    0.11 sec
+    Start 9: test_collection_failures
+9/9 Test #9: test_collection_failures ...........   Passed    0.13 sec
+
+100% tests passed, 0 tests failed out of 9
+
+Total Test time (real) =   1.20 sec
+
+The following tests did not run:
+	  3 - test_internal_temperature (Skipped)

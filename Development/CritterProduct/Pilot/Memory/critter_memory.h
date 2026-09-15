@@ -9,7 +9,8 @@ extern "C" {
 
 typedef struct
 {
-    critter_sample_t *buffer;
+    /* A02: Fixed ownership and a verifiable upper bound, matching the Pilot window. */
+    critter_sample_t buffer[CRITTER_MEMORY_MAX_CAPACITY];
     size_t capacity;
     size_t head;
     size_t count;

@@ -1,0 +1,55 @@
+Checking Development/CritterProduct/Pilot/main.c ...
+1/5 files checked 13% done
+Checking Development/CritterProduct/Pilot/IO/critter_io.c ...
+Development/CritterProduct/Pilot/IO/critter_io.c:118:19: style: Variable 'comma' can be declared as pointer to const [constVariablePointer]
+            char *comma = strchr(buffer, ',');
+                  ^
+2/5 files checked 48% done
+Checking Development/CritterProduct/Pilot/Memory/critter_memory.c ...
+3/5 files checked 65% done
+Checking Development/CritterProduct/Pilot/Computation/critter_computation.c ...
+4/5 files checked 75% done
+Checking Utils/SenseHat/sense_hat_environment.c ...
+Utils/SenseHat/sense_hat_environment.c:182:24: style: Condition 'sensor->hts_fd<0' is always true [knownConditionTrueFalse]
+    if (sensor->hts_fd < 0)
+                       ^
+Utils/SenseHat/sense_hat_environment.c:181:33: note: Calling function 'open_sensor' returns -1
+    sensor->hts_fd = open_sensor(i2c_device, HTS221_ADDRESS);
+                                ^
+Utils/SenseHat/sense_hat_environment.c:181:33: note: Assignment 'sensor->hts_fd=open_sensor(i2c_device,0x5F)', assigned value is -1
+    sensor->hts_fd = open_sensor(i2c_device, HTS221_ADDRESS);
+                                ^
+Utils/SenseHat/sense_hat_environment.c:182:24: note: Condition 'sensor->hts_fd<0' is always true
+    if (sensor->hts_fd < 0)
+                       ^
+Utils/SenseHat/sense_hat_environment.c:186:29: style: Condition 'sensor->pressure_fd<0' is always true [knownConditionTrueFalse]
+    if (sensor->pressure_fd < 0 ||
+                            ^
+Utils/SenseHat/sense_hat_environment.c:184:38: note: Calling function 'open_sensor' returns -1
+    sensor->pressure_fd = open_sensor(i2c_device, LPS25H_ADDRESS);
+                                     ^
+Utils/SenseHat/sense_hat_environment.c:184:38: note: Assignment 'sensor->pressure_fd=open_sensor(i2c_device,0x5C)', assigned value is -1
+    sensor->pressure_fd = open_sensor(i2c_device, LPS25H_ADDRESS);
+                                     ^
+Utils/SenseHat/sense_hat_environment.c:186:29: note: Condition 'sensor->pressure_fd<0' is always true
+    if (sensor->pressure_fd < 0 ||
+                            ^
+Checking Utils/SenseHat/sense_hat_environment.c: __linux__=__linux__...
+5/5 files checked 100% done
+Utils/SenseHat/sense_hat_environment.c:148:5: style: The function 'sense_hat_environment_set_hts_odr' should have static linkage since it is not used outside of its translation unit. [staticFunction]
+int sense_hat_environment_set_hts_odr(const sense_hat_environment_t *sensor, sense_hat_hts_odr_t odr)
+    ^
+Utils/SenseHat/sense_hat_environment.c:158:5: style: The function 'sense_hat_environment_set_pressure_odr' should have static linkage since it is not used outside of its translation unit. [staticFunction]
+int sense_hat_environment_set_pressure_odr(const sense_hat_environment_t *sensor, sense_hat_pressure_odr_t odr)
+    ^
+Utils/SenseHat/sense_hat_environment.c:217:5: style: The function 'sense_hat_environment_read_temperature' should have static linkage since it is not used outside of its translation unit. [staticFunction]
+int sense_hat_environment_read_temperature(const sense_hat_environment_t *sensor, double *temperature_c)
+    ^
+Utils/SenseHat/sense_hat_environment.c:237:5: style: The function 'sense_hat_environment_read_humidity' should have static linkage since it is not used outside of its translation unit. [staticFunction]
+int sense_hat_environment_read_humidity(const sense_hat_environment_t *sensor, double *humidity_percent)
+    ^
+Utils/SenseHat/sense_hat_environment.c:264:5: style: The function 'sense_hat_environment_read_pressure' should have static linkage since it is not used outside of its translation unit. [staticFunction]
+int sense_hat_environment_read_pressure(const sense_hat_environment_t *sensor, double *pressure_hpa)
+    ^
+nofile:0:0: information: Active checkers: 119/186 [checkersReport]
+

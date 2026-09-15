@@ -1,4 +1,5 @@
 #include <math.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -14,6 +15,9 @@ int main(void)
 
     if (file == NULL)
     {
+        /* A25: Missing Pi hardware is not a passed hardware check. */
+        if (errno == ENOENT)
+            return 77;
         fprintf(stderr, "failed to open internal temperature file: %s\n", CPU_TEMP_PATH);
         return 1;
     }

@@ -1,0 +1,4 @@
+Collecting: 00:05 / 01:00Collecting: 00:10 / 01:00Collecting: 00:15 / 01:00Collecting: 00:20 / 01:00Collecting: 00:25 / 01:00Collecting: 00:30 / 01:00Collecting: 00:35 / 01:00Collecting: 00:40 / 01:00Collecting: 00:45 / 01:00Collecting: 00:50 / 01:00Collecting: 00:55 / 01:00
+metrics: reads=577 valid=564 rejected=13 outliers=0 rate=9.61Hz retained=0.18
+summary: count=100 min=40.25 max=40.36 mean=40.31 median=40.31 stddev=0.022 source=2
+analysis: current=40.31 predicted=40.41 trend=0.0036 rate=0.0036 hvac=false heating=false cooling=false stable=true

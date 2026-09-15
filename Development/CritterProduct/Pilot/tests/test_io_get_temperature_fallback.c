@@ -30,6 +30,8 @@ int main(void)
         return 1;
     }
 
+    if (critter_io_close() != 0)
+        return 1;
     printf("temperature source=%d value=%.6f C\n", (int)source, temperature_c);
     return 0;
 }

@@ -4,6 +4,12 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <math.h>
+
+#define CRITTER_MEMORY_MAX_CAPACITY 100U
+#define CRITTER_MAX_SAMPLE_TOTAL 1000000000U
+/* H01: Arithmetic envelope, not a sensor accuracy/range specification. */
+#define CRITTER_NUMERIC_LIMIT 1.0e100
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,6 +34,19 @@ typedef struct
     bool has_pressure;
 } critter_sample_t;
 
+/* H01/H03: Share validation at acquisition, persistence and memory boundaries. */
+static inline int critter_sample_valid(const critter_sample_t *sample)
+{
+    return sample != NULL && isfinite(sample->timestamp_s) &&
+           sample->timestamp_s > 0.0 && sample->timestamp_s <= CRITTER_NUMERIC_LIMIT &&
+           isfinite(sample->temperature_c) && fabs(sample->temperature_c) <= CRITTER_NUMERIC_LIMIT &&
+           sample->source >= TEMPERATURE_SOURCE_SENSE_HAT && sample->source <= TEMPERATURE_SOURCE_CPU &&
+           (!sample->has_humidity || (isfinite(sample->humidity_percent) &&
+             sample->humidity_percent >= 0.0 && sample->humidity_percent <= 100.0)) &&
+           (!sample->has_pressure || (isfinite(sample->pressure_hpa) &&
+             sample->pressure_hpa > 0.0 && sample->pressure_hpa <= CRITTER_NUMERIC_LIMIT));
+}
+
 typedef struct
 {
     size_t sample_count;
@@ -40,6 +59,7 @@ typedef struct
     double median_temperature_c;
     double stddev_temperature_c;
     double first_timestamp_s;
+    double first_temperature_c;
     double last_timestamp_s;
     double retained_ratio;
     critter_temperature_source_t source;
