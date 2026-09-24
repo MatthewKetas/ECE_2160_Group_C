@@ -53,3 +53,8 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Mac and JetBrains IDEs
+.DS_Store
+.vscode/
+.idea/
