@@ -54,3 +54,8 @@ it were measured here. See the assignment's
 ```sh
 python3 -m unittest discover -s PowerAssessment -p 'test_*.py'
 ```
+
+## Running a program along with the power checker
+./build/pi/Pilot &
+python3 PowerAssessment/baseline_power/baseline_power.py
+wait
