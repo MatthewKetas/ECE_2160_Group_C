@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/Pilot.dir/main.c.o -o Pilot  libPilot_core.a -lm 

@@ -1,0 +1,10 @@
+/home/mtk67/Documents/GitHub/ECE_2160_Group_C/build/pi/CMakeFiles/Pilot_core.dir
+/home/mtk67/Documents/GitHub/ECE_2160_Group_C/build/pi/CMakeFiles/Pilot.dir
+/home/mtk67/Documents/GitHub/ECE_2160_Group_C/build/pi/CMakeFiles/test_memory_computation.dir
+/home/mtk67/Documents/GitHub/ECE_2160_Group_C/build/pi/CMakeFiles/test_data_fallback.dir
+/home/mtk67/Documents/GitHub/ECE_2160_Group_C/build/pi/CMakeFiles/test_internal_temperature.dir
+/home/mtk67/Documents/GitHub/ECE_2160_Group_C/build/pi/CMakeFiles/test_io_get_temperature_fallback.dir
+/home/mtk67/Documents/GitHub/ECE_2160_Group_C/build/pi/CMakeFiles/test_io_get_temperature_sources.dir
+/home/mtk67/Documents/GitHub/ECE_2160_Group_C/build/pi/CMakeFiles/test.dir
+/home/mtk67/Documents/GitHub/ECE_2160_Group_C/build/pi/CMakeFiles/edit_cache.dir
+/home/mtk67/Documents/GitHub/ECE_2160_Group_C/build/pi/CMakeFiles/rebuild_cache.dir

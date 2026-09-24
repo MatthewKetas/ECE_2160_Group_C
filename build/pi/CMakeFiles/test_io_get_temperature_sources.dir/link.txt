@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/test_io_get_temperature_sources.dir/tests/test_io_get_temperature_sources.c.o -o test_io_get_temperature_sources  libPilot_core.a -lm 

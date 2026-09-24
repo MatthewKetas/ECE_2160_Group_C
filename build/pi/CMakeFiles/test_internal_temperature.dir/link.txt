@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/test_internal_temperature.dir/tests/test_internal_temperature.c.o -o test_internal_temperature  libPilot_core.a -lm 

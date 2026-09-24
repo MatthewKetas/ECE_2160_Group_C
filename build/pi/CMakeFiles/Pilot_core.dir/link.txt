@@ -1,0 +1,2 @@
+/usr/bin/ar qc libPilot_core.a CMakeFiles/Pilot_core.dir/Computation/critter_computation.c.o CMakeFiles/Pilot_core.dir/IO/critter_io.c.o CMakeFiles/Pilot_core.dir/Memory/critter_memory.c.o CMakeFiles/Pilot_core.dir/home/mtk67/Documents/GitHub/ECE_2160_Group_C/Utils/SenseHat/sense_hat_environment.c.o
+/usr/bin/ranlib libPilot_core.a

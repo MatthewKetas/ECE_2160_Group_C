@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/test_data_fallback.dir/tests/test_data_fallback.c.o -o test_data_fallback  libPilot_core.a -lm 

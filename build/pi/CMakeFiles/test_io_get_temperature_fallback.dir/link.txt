@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/test_io_get_temperature_fallback.dir/tests/test_io_get_temperature_fallback.c.o -o test_io_get_temperature_fallback  libPilot_core.a -lm 

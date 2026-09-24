@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/test_memory_computation.dir/tests/test_memory_computation.c.o -o test_memory_computation  libPilot_core.a -lm 
