@@ -105,9 +105,6 @@ static int critter_detect_outlier(const critter_memory_t *memory, const critter_
     if (memory == NULL || sample == NULL)
         return 0;
 
-    if (memory->scratch == NULL)
-        return 0;
-
     valid_count = memory->count;
     if (valid_count < 3U)
         return 0;
@@ -205,11 +202,7 @@ int critter_memory_build_summary(const critter_memory_t *memory,
         return -1;
     }
 
-    if (memory->scratch == NULL)
-    {
-        return -1;
-    }
-
+    
     count = memory->count;
 
     (void)memset(summary, 0, sizeof(*summary));

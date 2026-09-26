@@ -11,8 +11,8 @@ extern "C" {
 
 typedef struct
 {
-    critter_sample_t *buffer;
-    double *scratch;
+    critter_sample_t buffer[CRITTER_MEMORY_MAX_SAMPLES];
+    double           scratch[CRITTER_MEMORY_MAX_SAMPLES];
     size_t capacity;
     size_t head;
     size_t count;
