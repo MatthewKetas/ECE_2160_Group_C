@@ -1122,29 +1122,9 @@ sense_hat_environment_read_pressure:
 	ldrb	w1, [sp, 39]	// xl.17_16, xl
 // Utils/SenseHat/sense_hat_environment.c:253:     uint32_t raw24 = ((uint32_t)high << 16) | ((uint32_t)low << 8) | xl;
 	orr	w0, w0, w1	// raw24_32, _15, _17
-	str	w0, [sp, 44]	// raw24_32, raw24
-// Utils/SenseHat/sense_hat_environment.c:254:     int32_t raw = (raw24 & 0x00800000U) ? (int32_t)(raw24 | 0xFF000000U) : (int32_t)raw24;
-	ldr	w0, [sp, 44]	// tmp136, raw24
-	and	w0, w0, 8388608	// _18, tmp136,
-// Utils/SenseHat/sense_hat_environment.c:254:     int32_t raw = (raw24 & 0x00800000U) ? (int32_t)(raw24 | 0xFF000000U) : (int32_t)raw24;
-	cmp	w0, 0	// _18,
-	beq	.L80		//,
-// Utils/SenseHat/sense_hat_environment.c:254:     int32_t raw = (raw24 & 0x00800000U) ? (int32_t)(raw24 | 0xFF000000U) : (int32_t)raw24;
-	ldr	w0, [sp, 44]	// tmp137, raw24
-	orr	w0, w0, -16777216	// _19, tmp137,
-	b	.L81		//
-.L80:
-// Utils/SenseHat/sense_hat_environment.c:254:     int32_t raw = (raw24 & 0x00800000U) ? (int32_t)(raw24 | 0xFF000000U) : (int32_t)raw24;
-	ldr	w0, [sp, 44]	// iftmp.18_23, raw24
-.L81:
-// Utils/SenseHat/sense_hat_environment.c:254:     int32_t raw = (raw24 & 0x00800000U) ? (int32_t)(raw24 | 0xFF000000U) : (int32_t)raw24;
-	str	w0, [sp, 40]	// iftmp.18_23, raw
-// Utils/SenseHat/sense_hat_environment.c:256:     *pressure_hpa = raw / 4096.0;
-	ldr	w0, [sp, 40]	// tmp138, raw
-	scvtf	d31, w0	// _20, tmp138
-	mov	x0, 4661225614328463360	// tmp142,
-	fmov	d30, x0	// tmp139, tmp142
-	fdiv	d31, d31, d30	// _21, _20, tmp139
+// Assembly optimization: exact signed 24-bit conversion with 12 fractional bits.
+	sbfx	w0, w0, #0, #24
+	scvtf	d31, w0, #12
 // Utils/SenseHat/sense_hat_environment.c:256:     *pressure_hpa = raw / 4096.0;
 	ldr	x0, [sp, 16]	// tmp140, pressure_hpa
 	str	d31, [x0]	// _21, *pressure_hpa_28(D)

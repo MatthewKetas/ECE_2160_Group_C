@@ -250,27 +250,10 @@ main:
 	bmi	.L18		//,
 	b	.L11		//
 .L18:
-// PowerAssessment/IO/IO_main.c:75:             sleep_ts.tv_sec = (time_t)sample_interval_s;
-	ldr	d31, [sp, 168]	// tmp208, sample_interval_s
-	fcvtzs	d31, d31	// _24, tmp208
-// PowerAssessment/IO/IO_main.c:75:             sleep_ts.tv_sec = (time_t)sample_interval_s;
-	str	d31, [sp, 64]	// _24, sleep_ts.tv_sec
-// PowerAssessment/IO/IO_main.c:77:                 (long)((sample_interval_s - (double)sleep_ts.tv_sec) * 1000000000.0);
-	ldr	d31, [sp, 64]	// _25, sleep_ts.tv_sec
-// PowerAssessment/IO/IO_main.c:77:                 (long)((sample_interval_s - (double)sleep_ts.tv_sec) * 1000000000.0);
-	scvtf	d31, d31	// _26, _25
-// PowerAssessment/IO/IO_main.c:77:                 (long)((sample_interval_s - (double)sleep_ts.tv_sec) * 1000000000.0);
-	ldr	d30, [sp, 168]	// tmp209, sample_interval_s
-	fsub	d31, d30, d31	// _27, tmp209, _26
-// PowerAssessment/IO/IO_main.c:77:                 (long)((sample_interval_s - (double)sleep_ts.tv_sec) * 1000000000.0);
-	mov	x0, 225833675390976	// tmp233,
-	movk	x0, 0x41cd, lsl 48	// tmp233,,
-	fmov	d30, x0	// tmp210, tmp233
-	fmul	d31, d31, d30	// _28, _27, tmp210
-// PowerAssessment/IO/IO_main.c:77:                 (long)((sample_interval_s - (double)sleep_ts.tv_sec) * 1000000000.0);
-	fcvtzs	d31, d31	// _29, _28
-// PowerAssessment/IO/IO_main.c:76:             sleep_ts.tv_nsec =
-	str	d31, [sp, 72]	// _29, sleep_ts.tv_nsec
+// Assembly optimization: the configured interval is exactly 100 ms.
+	mov	x0, #0xe100
+	movk	x0, #0x05f5, lsl #16
+	stp	xzr, x0, [sp, 64]   // tv_sec = 0; tv_nsec = 100000000
 // PowerAssessment/IO/IO_main.c:79:             if (nanosleep(&sleep_ts, NULL) != 0)
 	add	x0, sp, 64	// tmp211,,
 	mov	x1, 0	//,
