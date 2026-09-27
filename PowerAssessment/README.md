@@ -209,3 +209,42 @@ vcgencmd measure_clock arm
 ## Fifth Program
 printf '%s\n' "$saved_max" | sudo tee "$freq_policy/scaling_max_freq"
 printf '%s\n' "$saved_governor" | sudo tee "$freq_policy/scaling_governor"
+
+# Generating Assembly
+## First Command
+mkdir -p PowerAssessment/asm/original PowerAssessment/asm/edited
+
+for source in \
+    PowerAssessment/IO/IO_main.c \
+    Development/CritterProduct/Pilot/IO/critter_io.c \
+    Utils/SenseHat/sense_hat_environment.c \
+    PowerAssessment/mem/Mem_main.c \
+    Development/CritterProduct/Pilot/Memory/critter_memory.c \
+    PowerAssessment/comp/Compute_main.c \
+    Development/CritterProduct/Pilot/Computation/critter_computation.c
+do
+    gcc -std=c11 -O0 -Wall -Wextra \
+        -I Development/CritterProduct/Pilot \
+        -S -fverbose-asm "$source" \
+        -o "PowerAssessment/asm/original/$(basename "$source" .c).s" || break
+done
+
+## Second Command
+cp PowerAssessment/asm/original/*.s PowerAssessment/asm/edited/
+
+## Third Command
+# I/O
+gcc PowerAssessment/asm/edited/IO_main.s \
+    PowerAssessment/asm/edited/critter_io.s \
+    PowerAssessment/asm/edited/sense_hat_environment.s \
+    -lm -o PowerAssessment/IO/IO_asm
+
+# Memory
+gcc PowerAssessment/asm/edited/Mem_main.s \
+    PowerAssessment/asm/edited/critter_memory.s \
+    -lm -o PowerAssessment/mem/Mem_asm
+
+# Compute
+gcc PowerAssessment/asm/edited/Compute_main.s \
+    PowerAssessment/asm/edited/critter_computation.s \
+    -lm -o PowerAssessment/comp/Compute_asm
