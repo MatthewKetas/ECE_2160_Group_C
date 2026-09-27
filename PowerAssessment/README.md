@@ -177,3 +177,35 @@ gcc -std=c11 -O0 -Wall -Wextra -I Development/CritterProduct/Pilot \
 
 This checks all dataset counts, the saved summary against the actual memory
 functions, and the expected prediction. It is a correctness check, not a power run.
+
+# Changing clock speed
+## First program
+freq_policy=/sys/devices/system/cpu/cpufreq/policy0
+
+cat "$freq_policy/scaling_available_frequencies"
+cat "$freq_policy/scaling_available_governors"
+cat "$freq_policy/scaling_min_freq"
+cat /sys/devices/system/cpu/online
+
+saved_governor=$(cat "$freq_policy/scaling_governor")
+saved_max=$(cat "$freq_policy/scaling_max_freq")
+
+## Second Program (setting 2.1 GHz)
+echo 2100000 | sudo tee "$freq_policy/scaling_max_freq"
+echo performance | sudo tee "$freq_policy/scaling_governor"
+
+vcgencmd measure_clock arm
+vcgencmd measure_temp
+vcgencmd get_throttled
+
+## Third Program
+echo 1800000 | sudo tee "$freq_policy/scaling_max_freq"
+vcgencmd measure_clock arm
+
+## Fourth Program
+echo 1500000 | sudo tee "$freq_policy/scaling_max_freq"
+vcgencmd measure_clock arm
+
+## Fifth Program
+printf '%s\n' "$saved_max" | sudo tee "$freq_policy/scaling_max_freq"
+printf '%s\n' "$saved_governor" | sudo tee "$freq_policy/scaling_governor"
