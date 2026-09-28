@@ -248,3 +248,27 @@ gcc PowerAssessment/asm/edited/Mem_main.s \
 gcc PowerAssessment/asm/edited/Compute_main.s \
     PowerAssessment/asm/edited/critter_computation.s \
     -lm -o PowerAssessment/comp/Compute_asm
+
+## Master power and energy workbook
+
+Run `python3 PowerAssessment/combine_runs.py` from the repository root to validate
+and combine every CSV under `PowerAssessment/results/`. This writes
+`outputs/power_master/run_results.csv` and the workbook input `combined.json`.
+Then run `node PowerAssessment/build_master.mjs` with `@oai/artifact-tool`
+available through `outputs/power_master/node_modules` (the Codex bundled runtime
+is linked there in this workspace). Both scripts accept a custom output directory:
+`--output PATH` for Python and the first positional argument for Node.
+
+The output is `outputs/power_master/master_power_energy.xlsx`. Run results
+contains one row per CSV with mean power in W and estimated 60-second energy
+in J together. T-test columns arranges both metrics by dataset. Raw samples
+retains every numeric source field, and Methods documents assumptions.
+
+Energy is mean power times the nominal 60-second logger window, because the
+actual final duration and program start/finish markers are not saved in the CSVs.
+These are PMIC measurement-window estimates, not isolated program energy.
+Compute datasets currently have only one run each, so they cannot support
+between-run t-tests. Equal-duration energy and power tests give identical p-values.
+
+Check the combining logic with:
+`python3 -m unittest discover -s PowerAssessment -p test_combine_runs.py`.
