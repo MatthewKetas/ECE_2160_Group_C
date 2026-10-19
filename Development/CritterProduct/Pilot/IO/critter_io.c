@@ -67,7 +67,7 @@ static int critter_read_data_temperature(double *temperature_c)
 {
     static bool initialized = false;
     static double last_value = 20.0;
-    const char *path = getenv("CRITTER_DATA_FILE");
+    const char *path = getenv("CRITTER_INPUT_FILE");
     FILE *file;
     double value = 0.0;
     char buffer[256];
@@ -75,6 +75,8 @@ static int critter_read_data_temperature(double *temperature_c)
     if (temperature_c == NULL)
         return -1;
 
+    if (path == NULL || path[0] == '\0')
+        path = getenv("CRITTER_DATA_FILE");
     if (path == NULL || path[0] == '\0')
     {
         path = "Development/Data/temperature_samples.csv";
@@ -299,7 +301,7 @@ int critter_io_read_sample(critter_sample_t *sample)
 
 int critter_io_save_sample(const critter_sample_t *sample)
 {
-    const char *env_path = getenv("CRITTER_DATA_FILE");
+    const char *env_path = getenv("CRITTER_OUTPUT_FILE");
     char path[4096];
     FILE *file;
     const char *source_name;
@@ -307,6 +309,8 @@ int critter_io_save_sample(const critter_sample_t *sample)
     if (sample == NULL)
         return -1;
 
+    if (env_path == NULL || env_path[0] == '\0')
+        env_path = getenv("CRITTER_DATA_FILE");
     if (env_path != NULL && env_path[0] != '\0')
     {
         snprintf(path, sizeof(path), "%s", env_path);
@@ -345,7 +349,7 @@ int critter_io_save_sample(const critter_sample_t *sample)
             break;
     }
 
-    fprintf(file,
+    int written = fprintf(file,
             "%.6f,%.6f,%.6f,%.6f,%s,%d,%d\n",
             sample->timestamp_s,
             sample->temperature_c,
@@ -355,8 +359,8 @@ int critter_io_save_sample(const critter_sample_t *sample)
             sample->has_humidity ? 1 : 0,
             sample->has_pressure ? 1 : 0);
 
-    fclose(file);
-    return 0;
+    int close_result = fclose(file);
+    return written < 0 || close_result != 0 ? -1 : 0;
 }
 
 int critter_io_save_metrics(const critter_window_summary_t *summary,

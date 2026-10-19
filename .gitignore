@@ -53,3 +53,8 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Mac files
+.DS_Store
+.idea/
+.vscode/
