@@ -1,5 +1,7 @@
 import argparse
+import contextlib
 import csv
+import io
 import json
 import os
 from pathlib import Path
@@ -143,6 +145,34 @@ class PlanAndConfigurationTests(unittest.TestCase):
         with mock.patch.object(collect.platform, "system", return_value="Darwin"):
             with self.assertRaises(RuntimeError):
                 collect.require_pi(root=True)
+
+    def test_startup_as_process_group_leader_needs_no_new_session(self):
+        state = {"online": [0, 1, 2, 3], "policies": {"policy0": {
+            "scaling_governor": "performance", "scaling_min_freq": "1000000",
+            "scaling_max_freq": "2400000", "cpuinfo_min_freq": "1000000",
+            "cpuinfo_max_freq": "2400000", "scaling_available_governors": "performance"}}}
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            args = argparse.Namespace(ram="8", family="ram", repetitions=1, seed=2160,
+                source="data", binary=Path("/usr/bin/true"), input=HERE / "input.csv",
+                matrix=Path(tmp) / "absent-matrix", results=Path(tmp) / "results")
+            # sudo can create a process-group leader that is not a session leader.
+            for name, value in (("getpid", 42), ("getpgrp", 42), ("getsid", 1), ("sched_getscheduler", 0)):
+                stack.enter_context(mock.patch.object(collect.os, name, return_value=value, create=True))
+            stack.enter_context(mock.patch.object(collect.os, "SCHED_OTHER", 0, create=True))
+            setsid = stack.enter_context(mock.patch.object(collect.os, "setsid", side_effect=PermissionError(1, "Operation not permitted")))
+            stack.enter_context(mock.patch.object(collect, "require_pi"))
+            stack.enter_context(mock.patch.object(collect, "identity", return_value=(os.getuid(), os.getgid(), "unused")))
+            stack.enter_context(mock.patch.object(collect, "online_cpus", return_value=[0, 1, 2, 3]))
+            stack.enter_context(mock.patch.object(collect, "memory_check", return_value=7.8))
+            stack.enter_context(mock.patch.object(collect, "snapshot", return_value=state))
+            stack.enter_context(mock.patch.object(collect, "command_output", return_value={"returncode": 0}))
+            stack.enter_context(mock.patch.object(collect.os, "chown"))
+            one_run = stack.enter_context(mock.patch.object(collect, "one_run"))
+            stack.enter_context(mock.patch.object(collect, "restore"))
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            collect.run(args)
+            one_run.assert_called_once()
+            setsid.assert_not_called()
 
     def test_setup_failure_still_restores_settings_and_records_failure(self):
         with tempfile.TemporaryDirectory() as tmp:

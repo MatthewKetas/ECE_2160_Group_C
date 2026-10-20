@@ -156,177 +156,354 @@ to silently substitute a different governor. Runtime core/governor changes are
 restored to the starting settings after each run. All four cores must be online
 when collection starts.
 
-## Start networking on the Mac
+## Run the experiments from starting the Mac server
 
-On this Mac, a native arm64 iperf3 3.22 executable was built locally after the
-Intel/Rosetta Homebrew installation passed an incompatible westmere flag to the
-ARM compiler. It uses the cached official source (matching the cached Homebrew
-recipe's SHA-256), links only the system library, and disables optional OpenSSL
-authentication. The ordinary unauthenticated UDP/TCP tests remain available.
-The executable is ignored by Git and is only for the Mac; build/install the Pi's
-iperf3 through apt as described above. From the repository root, start this copy:
+Start here if the Pi dependencies and executables were prepared using the steps
+above. The commands below explicitly use three 60-second repetitions for the
+main study. Run one block at a time and wait for it to finish. Stop if a block
+reports an error. Machine labels tell you which terminal to use.
+
+The only information you need to type is the Mac's local IP address and, for the
+final transfer, your Pi's SSH login. The Pi saves the assessment directory so the
+commands after reboots work from a fresh terminal without finding the clone again.
+
+### 1. Mac terminal A start the network server
+
+Paste this into a Mac terminal, even if its current directory is your home folder:
 
 ```sh
-assessment=Development/CritterProduct/TimingAssessment
+cd "/Users/matthewketas/Desktop/University of Pittsburgh/Senior Year/7th Semester/Embedded Systems/ECE_2160_Group_C"
+assessment="$PWD/Development/CritterProduct/TimingAssessment"
 "$assessment/tools/iperf3/bin/iperf3" --version
-"$assessment/tools/iperf3/bin/iperf3" -s
+caffeinate -i "$assessment/tools/iperf3/bin/iperf3" -s
 ```
 
-On another Mac with a working Homebrew setup, install iperf3 if needed and start
-the server in a separate terminal instead:
+Wait for "Server listening on 5201". Leave this terminal running through the
+native-RAM campaign. caffeinate prevents idle system sleep while the server runs.
+Allow incoming connections if macOS asks.
+
+This is the native arm64 iperf3 3.22 built locally after Intel/Rosetta Homebrew
+passed incompatible westmere flags to the ARM compiler. It uses the cached
+official source matching the cached Homebrew recipe's SHA-256, links only the
+system library, and disables optional OpenSSL authentication. Reverse UDP was
+checked locally. The ignored tools directory stays on the Mac; the Pi uses apt's
+iperf3. No further Homebrew installation is needed for this step.
+
+### 2. Mac terminal B find the Mac IP address
+
+Open a second Mac terminal; keep terminal A running. Paste:
 
 ```sh
-brew install iperf3
-iperf3 -s
+for critter_interface in en0 en1; do
+    critter_address="$(ipconfig getifaddr "$critter_interface" 2>/dev/null)"
+    if [ -n "$critter_address" ]; then
+        printf '%s: %s\n' "$critter_interface" "$critter_address"
+    fi
+done
 ```
 
-Find the Mac's local IP under its active network connection settings. Both
-machines must be reachable over the chosen network; allow iperf3 through the Mac
-firewall if prompted. The server uses TCP and UDP port 5201. A private LAN or
-direct Ethernet connection avoids campus client-isolation restrictions.
+Note the IPv4 address for the connection shared with the Pi. If none appears,
+find it in System Settings under the active Wi-Fi/Ethernet connection. Keep the
+same interface throughout the study. The Pi needs TCP and UDP access to port
+5201; campus client isolation may require a private LAN or direct Ethernet link.
 
-Before the main study, test from the Pi (replace MAC_IP with the actual address):
+### 3. Pi terminal save the project location and apply the startup fix
+
+Open a terminal on the Pi in the ECE_2160_Group_C repository root. Use your
+ordinary Pi user account. Paste this block once:
 
 ```sh
-iperf3 -c MAC_IP -u -R -b 10M -l 1200 -t 10
-iperf3 -c MAC_IP -u -R -b 50M -l 1200 -t 10
+assessment="$(git rev-parse --show-toplevel)/Development/CritterProduct/TimingAssessment"
+mkdir -p "$HOME/.cache/critter-timing"
+printf '%s\n' "$assessment" > "$HOME/.cache/critter-timing/assessment"
+
+python3 - "$assessment/collect.py" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+old = "    if os.getsid(0) != os.getpid():\n        os.setsid()\n"
+if old in text:
+    path.write_text(text.replace(old, "", 1))
+    print("Startup fix applied.")
+elif "os.setsid()" not in text:
+    print("Startup fix is already present.")
+else:
+    raise SystemExit("Different collector version; no changes made.")
+PY
 ```
 
-Review achieved receive rate and loss. If 50 Mbit/s cannot be sustained, preserve
-that observation and agree on a supported high condition before main collection;
-do not label requested throughput as achieved throughput. During the actual
-experiment the runner starts/stops traffic and saves the full iperf3 JSON.
-Its receive-side loss, jitter, and throughput describe the network stream;
-Critter's timing metrics come from timing.csv. Avoid unrelated transfers, public
-speed-test servers, loopback traffic, or changes between Wi-Fi and Ethernet.
+This removes the unnecessary session-creation call responsible for the possible
+immediate "Collection stopped: [Errno 1] Operation not permitted" startup error.
+It is safe to repeat and requires no rebuild. Children inherit the collector's
+session, while separate process groups still allow cleanup.
 
-## First run a short Pi check
-
-Start with an ordinary Pi user account. Sudo gives the controller permission to
-change settings; Critter, GNU time, iperf3, and the matrix supervisor run back as
-that ordinary user. Negative niceness is applied before dropping privileges.
-Children share a session/autogroup and have separate process groups for cleanup.
+Check the Pi configuration:
 
 ```sh
-sudo python3 "$assessment/collect.py" run --ram 8 --family ram --repetitions 1 --duration 10 --results "$assessment/results/smoke"
-```
-
-Check that metadata.json says complete, time.txt exists, and run_summary.csv has
-100 scheduled cycles. Deadline misses may be zero or nonzero; they are outcomes,
-not grounds to rerun until a preferred result appears.
-
-Then check each control with short runs before committing to the long campaign:
-
-```sh
-sudo python3 "$assessment/collect.py" run --ram 8 --family cores --repetitions 1 --duration 10 --results "$assessment/results/smoke"
-sudo python3 "$assessment/collect.py" run --ram 8 --family governor --repetitions 1 --duration 10 --results "$assessment/results/smoke"
-sudo python3 "$assessment/collect.py" run --ram 8 --family priority --repetitions 1 --duration 10 --results "$assessment/results/smoke"
-sudo python3 "$assessment/collect.py" run --ram 8 --family network --network-host MAC_IP --repetitions 1 --duration 10 --results "$assessment/results/smoke"
-```
-
-Check effective masks/niceness, governor records, continuous matrix coverage,
-and achieved network throughput. Failed runs remain visible and stop the
-session; correct the cause before collecting another labeled session.
-
-## Collect the main native-RAM campaign
-
-Use a persistent terminal session on the Pi if collecting over SSH. Leave the
-Mac awake with its iperf3 server running. Reassign assessment after opening a new shell.
-
-```sh
-sudo python3 "$assessment/collect.py" run --ram 8 --family all --network-host MAC_IP --results "$assessment/results/main"
-```
-
-This performs all 39 native-RAM runs in three shuffled repetition blocks. The
-collector prints the current condition and creates a timestamped session folder.
-It also accepts --family cores, governor, network, priority, or ram when splitting
-the campaign across sessions; those sessions each include their own baseline.
-
-## Collect the reduced-RAM blocks
-
-The RAM helper backs up cmdline.txt once, preserves its other boot parameters,
-and sets exactly one mem= argument. It never reboots automatically. This reduces
-kernel-managed RAM; it does not emulate different DRAM bandwidth or hardware.
-The collector checks both the boot argument and actual MemTotal after reboot.
-MemTotal will be below the nominal cap because the system reserves some memory.
-Swap remains unchanged and is recorded; do not change swap between these blocks.
-
-Run these steps in order, reconnecting and returning to the repository after each reboot:
-
-```sh
-sudo python3 "$assessment/collect.py" ram 4
-sudo reboot
-```
-
-```sh
-assessment=Development/CritterProduct/TimingAssessment
 python3 "$assessment/collect.py" doctor
-sudo python3 "$assessment/collect.py" run --ram 4 --family ram --results "$assessment/results/main"
-sudo python3 "$assessment/collect.py" ram 2
-sudo reboot
 ```
 
+Confirm four online cores, native RAM near 8 GB, GNU time, iperf3, and the
+performance/powersave/ondemand governors. If ondemand is missing, run the
+modprobe command in the preparation section and check again before continuing.
+
+If using SSH, start a persistent session with the following command, then proceed
+in the terminal it opens. Skip this block when using the Pi's local terminal.
+
 ```sh
-assessment=Development/CritterProduct/TimingAssessment
+sudo apt install tmux
+tmux new -s critter-timing
+```
+
+### 4. Pi terminal enter the Mac IP and check both traffic levels
+
+Paste this block, then type the Mac's IP address when prompted and press Enter:
+
+```sh
+printf 'Mac IPv4 address: '
+read -r critter_mac_ip
+```
+
+Then paste:
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+printf '%s\n' "$critter_mac_ip" > "$HOME/.cache/critter-timing/mac-ip"
+iperf3 -c "$critter_mac_ip" -u -R -b 10M -l 1200 -t 10
+iperf3 -c "$critter_mac_ip" -u -R -b 50M -l 1200 -t 10
+```
+
+Both tests must connect. Inspect achieved receive throughput and packet loss;
+requested throughput is not proof that rate arrived. Resolve connectivity or
+unsupported rates before main collection. The collector subsequently starts,
+stops, and records the traffic automatically. Do not start matrixmult manually.
+
+### 5. Pi terminal check the baseline and all experiment controls
+
+First retry the short baseline with the startup fix:
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+sudo python3 "$assessment/collect.py" run \
+  --ram 8 --family ram --repetitions 1 --duration 10 \
+  --results "$assessment/results/smoke"
+```
+
+Expect "Saving 1 runs", a baseline condition, and "Collection complete". The
+session's run_summary.csv should show complete and 100 scheduled cycles.
+
+Now check all 13 native-RAM conditions together:
+
+```sh
+critter_mac_ip="$(cat "$HOME/.cache/critter-timing/mac-ip")"
+sudo python3 "$assessment/collect.py" run \
+  --ram 8 --family all --network-host "$critter_mac_ip" \
+  --repetitions 1 --duration 10 \
+  --results "$assessment/results/smoke"
+```
+
+Allow approximately six minutes. This session should contain 13 complete runs,
+each with 100 scheduled cycles. Check effective masks/niceness, governor records,
+matrix coverage, and achieved network throughput in its saved records. Failed
+runs remain visible and stop the session. Nonzero deadline misses are outcomes;
+do not repeat a run solely to obtain a preferred miss rate. Smoke data stays
+separate from the main dataset.
+
+### 6. Pi terminal collect the native 8 GB campaign
+
+Keep the Mac server running. Paste:
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+critter_mac_ip="$(cat "$HOME/.cache/critter-timing/mac-ip")"
+sudo python3 "$assessment/collect.py" run \
+  --ram 8 --family all --network-host "$critter_mac_ip" \
+  --repetitions 3 --duration 60 --source data --schedule periodic \
+  --results "$assessment/results/main"
+```
+
+Wait for all 39 runs to finish, approximately 50 minutes including setup.
+This covers the shared baseline, cores 3/2/1, powersave/ondemand, both traffic
+levels, the pinned quiet control, and matrix competition at nice -10/0/10/19.
+Conditions are shuffled inside each repetition block.
+
+Sudo controls hardware settings, but application/workload children run under
+your ordinary Pi account. Keep cooling, peripherals, storage, and swap unchanged.
+Avoid unrelated transfers and interaction during runs. Runtime core/governor
+settings are restored after each run. The Mac server can remain running while
+you complete the RAM blocks.
+
+### 7. Pi terminal set 4 GiB and reboot
+
+Continue only after the native campaign reports completion. The RAM helper
+backs up the boot command line and changes only its mem= limit. Have physical
+SD-card access available for recovery before beginning this sweep.
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+sudo python3 "$assessment/collect.py" ram 4 && sudo reboot
+```
+
+Wait for the Pi to boot, then reconnect/open a new Pi terminal.
+A reboot ends tmux sessions too. The next block works from your home folder.
+
+### 8. Pi terminal collect 4 GiB
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
 python3 "$assessment/collect.py" doctor
-sudo python3 "$assessment/collect.py" run --ram 2 --family ram --results "$assessment/results/main"
-sudo python3 "$assessment/collect.py" ram 1.5
-sudo reboot
+sudo python3 "$assessment/collect.py" run \
+  --ram 4 --family ram --repetitions 3 --duration 60 \
+  --source data --schedule periodic \
+  --results "$assessment/results/main"
 ```
 
+Expect three runs, approximately four minutes. The collector checks the boot
+argument and actual MemTotal before collecting. MemTotal is slightly below the
+nominal cap because some memory is reserved. The cap reduces kernel-managed
+memory; it does not emulate different DRAM hardware or bandwidth.
+
+After successful completion, paste the next block:
+
 ```sh
-assessment=Development/CritterProduct/TimingAssessment
+sudo python3 "$assessment/collect.py" ram 2 && sudo reboot
+```
+
+Wait for reboot, then reconnect/open a new Pi terminal.
+
+### 9. Pi terminal collect 2 GiB
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
 python3 "$assessment/collect.py" doctor
-sudo python3 "$assessment/collect.py" run --ram 1.5 --family ram --results "$assessment/results/main"
-sudo python3 "$assessment/collect.py" ram restore
-sudo reboot
+sudo python3 "$assessment/collect.py" run \
+  --ram 2 --family ram --repetitions 3 --duration 60 \
+  --source data --schedule periodic \
+  --results "$assessment/results/main"
 ```
 
-Restoring returns the original boot command line. The default Pi OS location is
-/boot/firmware/cmdline.txt, with /boot/cmdline.txt supported on older layouts.
-An explicit --cmdline path is available for a nonstandard configuration. If a
-RAM-limited boot fails, mount the boot partition on the Mac and restore the saved
-cmdline.txt.critter-timing.original before booting again. Have physical SD-card
-access before starting the reboot sweep. For a temporal-drift check, collect a
-further native-RAM baseline after restoration and report it as a closing control.
-
-## Summarize and preserve the data
-
-After all sessions, run on the Pi or on a copied results directory on the Mac:
+After all three runs finish successfully:
 
 ```sh
+sudo python3 "$assessment/collect.py" ram 1.5 && sudo reboot
+```
+
+Wait for reboot, then reconnect/open a new Pi terminal.
+
+### 10. Pi terminal collect 1.5 GiB
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+python3 "$assessment/collect.py" doctor
+sudo python3 "$assessment/collect.py" run \
+  --ram 1.5 --family ram --repetitions 3 --duration 60 \
+  --source data --schedule periodic \
+  --results "$assessment/results/main"
+```
+
+After all three runs finish successfully, restore the original boot configuration:
+
+```sh
+sudo python3 "$assessment/collect.py" ram restore && sudo reboot
+```
+
+Wait for reboot, then reconnect/open a new Pi terminal. Runtime cleanup alone
+does not remove a boot RAM cap; this final restoration and reboot are required.
+
+### 11. Pi terminal summarize and archive
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+python3 "$assessment/collect.py" doctor
 python3 "$assessment/analyze.py" "$assessment/results/main"
-tar -czf critter-timing-results.tar.gz -C "$assessment/results" main
 ```
 
-Copy the archive back to the Mac with your usual file transfer. Keep the raw
-data archive with the report materials; ignored results do not travel in git.
+Check the combined main-run statuses:
+
+```sh
+python3 - "$assessment/results/main/run_summary.csv" <<'PY'
+import csv
+from collections import Counter
+import sys
+
+with open(sys.argv[1], newline="") as file:
+    rows = list(csv.DictReader(file))
+print("Main run statuses:", dict(Counter(row["run_status"] for row in rows)))
+for row in rows:
+    if row["run_status"] != "complete":
+        print(row["condition"], row["run_status"], row["error"])
+PY
+```
+
+A single clean campaign has 48 complete main runs: 39 native-RAM runs plus nine
+reduced-RAM runs. Retain any failed attempts rather than deleting them to force
+this count. Short checks are in the separate smoke directory. The campaign
+contains 48 measured minutes; allow roughly 75-90 minutes overall for the checks,
+setup, network completion, and RAM reboots.
+
+Create the archive, including both main data and short-check records:
+
+```sh
+tar -czf "$HOME/critter-timing-results.tar.gz" -C "$assessment" results
+ls -lh "$HOME/critter-timing-results.tar.gz"
+```
 
 Each run contains timing.csv, samples.csv, experiment.json, metadata.json,
-time.txt, telemetry.jsonl, and stdout/stderr logs. Network runs additionally have
-the iperf3 JSON in network.stdout; priority runs have matrix supervision results
-in matrix.stdout. Each session includes plan.json, original_state.json,
-environment.json, source_snapshot.tar.gz, source/binary/input hashes, compiler
-and build information, and summaries. Telemetry polls roughly once per second
-and is buffered until the run ends: it can miss short transitions. The polling
-and traffic generator are part of the measured environment in every applicable
-condition and cannot establish a zero-overhead observation.
+time.txt, telemetry.jsonl, and stdout/stderr logs. Network runs include iperf3
+JSON in network.stdout; priority runs include supervisor results in matrix.stdout.
+Each session has plan.json, original_state.json, environment.json, source and
+build snapshots/hashes, and summaries.
 
-run_summary.csv preserves every run, including failures and missing traces.
-condition_summary.csv reports valid run counts and summaries across whole runs;
-individual cycles are not treated as independent experiment repetitions. It
-does not pool different sources, schedules, durations, periods/deadlines, or
-binary/input hashes. Its mean_run_response_p99_ms is the mean of run-level p99s,
-not a pooled p99. No observed maximum is a guaranteed worst-case bound.
+run_summary.csv retains every run, including failures. condition_summary.csv
+summarizes whole-run repetitions without pooling different sources, schedules,
+durations, periods/deadlines, or binary/input hashes. mean_run_response_p99_ms is
+a mean of run-level p99s, not a pooled p99. Telemetry polls roughly once a second
+and can miss brief transitions. No observed maximum establishes a hard bound.
 
-Ctrl-C or SIGTERM stops owned child process groups and restores CPU settings.
-SIGKILL/power loss cannot run cleanup. If needed, use the saved state:
+### 12. Mac terminal B copy the archive back
+
+Use the same Pi username and hostname/IP that you use for SSH. Run this block,
+type that login when prompted (for example, yourname@raspberrypi.local), and press Enter:
 
 ```sh
-sudo python3 "$assessment/collect.py" restore /absolute/path/to/session/original_state.json
+printf 'Pi SSH login (username@hostname-or-IP): '
+read -r critter_pi_login
 ```
 
-Runtime cleanup does not remove a boot RAM cap; use ram restore and reboot.
+Then paste:
+
+```sh
+scp "${critter_pi_login}:critter-timing-results.tar.gz" "$HOME/Downloads/"
+```
+
+The archive is now in Downloads. Raw results are ignored by Git, so a git push
+alone does not transfer them. Keep the archive with your report materials.
+You can stop Mac terminal A's server with Control-C.
+
+### Recovery if a run or reboot fails
+
+Ctrl-C/SIGTERM stops owned child groups and restores runtime CPU settings.
+SIGKILL or power loss cannot run cleanup. Use a session's original_state.json
+with the collector's restore command if runtime settings need recovery:
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+printf 'Full path to the session original_state.json: '
+read -r critter_state
+```
+
+After entering the path, run:
+
+```sh
+sudo python3 "$assessment/collect.py" restore "$critter_state"
+```
+
+The normal boot file is /boot/firmware/cmdline.txt (older layouts may use
+/boot/cmdline.txt). If a RAM-limited boot fails, mount the boot partition on the
+Mac and restore cmdline.txt from cmdline.txt.critter-timing.original, then boot
+again. Do not change swap settings between RAM blocks.
 
 ## Use the evidence in the paper
 

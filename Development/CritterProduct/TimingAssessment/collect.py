@@ -415,9 +415,7 @@ def run(args):
         raise RuntimeError("build matrixmult first")
     if any(c["network_mbit"] for c in plan) and (not args.network_host or not shutil.which("iperf3")):
         raise RuntimeError("network conditions need --network-host MAC_IP and iperf3 installed")
-    # Children share one session/autogroup; each receives its own cleanup process group.
-    if os.getsid(0) != os.getpid():
-        os.setsid()
+    # Inherit the caller's session; children share it and have separate cleanup groups.
     results_existed = args.results.exists()
     args.results.mkdir(parents=True, exist_ok=True)
     if not results_existed:
