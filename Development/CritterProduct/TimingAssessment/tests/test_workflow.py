@@ -86,13 +86,32 @@ class MetricsTests(unittest.TestCase):
             with (root / "condition_summary.csv").open() as f:
                 self.assertEqual(next(csv.DictReader(f))["runs_valid"], "0")
 
+    def test_legacy_and_boot_core_methods_are_not_pooled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name, extra in (("old", {}), ("new", {"core_method": "boot"})):
+                folder = root / name
+                folder.mkdir()
+                (folder / "metadata.json").write_text(json.dumps(
+                    dict(condition="baseline", status="failed", error="setup failed", **extra)))
+            analyze.analyze(root)
+            with (root / "condition_summary.csv").open() as file:
+                groups = list(csv.DictReader(file))
+            self.assertEqual({g["core_method"] for g in groups}, {"legacy", "boot"})
+            self.assertEqual(len(groups), 2)
+
 
 class PlanAndConfigurationTests(unittest.TestCase):
     def test_all_requested_conditions_and_repetition_blocks(self):
-        plan = collect.condition_plan()
+        native = collect.condition_plan()
+        self.assertEqual(len(native), 30)
+        reduced = [r for cores in (3, 2, 1)
+                   for r in collect.condition_plan(family="cores", cores=cores)]
+        plan = native + reduced
         self.assertEqual(len(plan), 39)
-        self.assertEqual(sum(len(collect.condition_plan(ram)) for ram in ("8", "4", "2", "1.5")), 48)
-        self.assertEqual(plan, collect.condition_plan())
+        self.assertEqual(len(reduced) + sum(len(collect.condition_plan(ram)) for ram in ("8", "4", "2", "1.5")), 48)
+        self.assertEqual(native, collect.condition_plan())
+        self.assertTrue(all(r["cores"] == 4 and r["core_method"] == "boot" for r in native))
         self.assertEqual({r["cores"] for r in plan}, {1, 2, 3, 4})
         self.assertEqual({r["governor"] for r in plan}, {"performance", "powersave", "ondemand"})
         self.assertEqual({r["nice"] for r in plan if r["matrix"]}, {-10, 0, 10, 19})
@@ -126,7 +145,7 @@ class PlanAndConfigurationTests(unittest.TestCase):
             cpu = Path(tmp)
             for i in range(1, 4):
                 (cpu / f"cpu{i}").mkdir()
-                (cpu / f"cpu{i}/online").write_text("1")
+                (cpu / f"cpu{i}/online").write_text("0" if i == 3 else "1")
             policy = cpu / "cpufreq/policy0"
             policy.mkdir(parents=True)
             initial = dict(scaling_governor="ondemand", scaling_min_freq="1500000", scaling_max_freq="1800000",
@@ -134,12 +153,86 @@ class PlanAndConfigurationTests(unittest.TestCase):
                            scaling_available_governors="performance powersave ondemand")
             for name, value in initial.items():
                 (policy / name).write_text(value)
+            (policy / "affected_cpus").write_text("0 1 2")
             state = collect.snapshot()
-            collect.configure(dict(cores=1, governor="powersave"))
-            self.assertEqual(collect.online_cpus(), [0])
-            self.assertEqual((policy / "scaling_max_freq").read_text(), "2400000")
+            collect.configure(dict(cores=3, governor="powersave"))
+            self.assertEqual(collect.online_cpus(), [0, 1, 2])
+            self.assertEqual((policy / "scaling_max_freq").read_text().strip(), "2400000")
             collect.restore(state)
             self.assertEqual(collect.snapshot(), state)
+
+    def test_core_setup_requires_boot_and_never_writes_hotplug(self):
+        with mock.patch.object(collect, "online_cpus", return_value=[0, 1, 2]), \
+             mock.patch.object(collect, "read", return_value="root=x maxcpus=3"), \
+             mock.patch.object(Path, "write_text") as write:
+            collect.check_cores(3, boot=True)
+            write.assert_not_called()
+            with self.assertRaisesRegex(RuntimeError, "set 'cores 4' and reboot"):
+                collect.configure(dict(cores=4, governor="performance"))
+            with mock.patch.object(collect, "read", return_value="root=x"):
+                with self.assertRaisesRegex(RuntimeError, "accidentally offline"):
+                    collect.check_cores(3, boot=True)
+
+    def test_core_plan_cannot_change_other_factors(self):
+        for ram, family in (("8", "all"), ("8", "network"), ("4", "cores")):
+            with self.assertRaises(ValueError):
+                collect.condition_plan(ram=ram, family=family, cores=2)
+
+    def test_inactive_policy_is_excluded_from_setup_and_telemetry(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(collect, "CPU", Path(tmp)):
+            policy = Path(tmp) / "cpufreq/policy3"
+            policy.mkdir(parents=True)
+            (policy / "affected_cpus").write_text("\n")
+            (policy / "scaling_governor").write_text("powersave")
+            self.assertEqual(collect.snapshot()["policies"], {})
+            self.assertEqual(collect.telemetry()["policies"], {})
+            with self.assertRaisesRegex(RuntimeError, "no active"):
+                collect.configure(dict(cores=4, governor="performance"))
+
+    def test_boot_core_and_ram_edits_preserve_each_other(self):
+        original = "console=tty1 root=x rootwait mem=4G maxcpus=2\n"
+        edited = collect.change_cmdline(original, cores=3)
+        self.assertIn("mem=4G", edited)
+        self.assertIn("maxcpus=3", edited)
+        edited = collect.change_cmdline(edited, ram="1.5")
+        self.assertIn("maxcpus=3", edited)
+        self.assertIn("mem=1536M", edited)
+        self.assertNotIn("maxcpus=", collect.change_cmdline(edited, cores=4))
+
+    def test_boot_helpers_share_backup_and_restore_original(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(collect, "require_pi"), \
+             mock.patch.object(collect.os, "sync", create=True), contextlib.redirect_stdout(io.StringIO()):
+            path = Path(tmp) / "cmdline.txt"
+            original = "console=tty1 root=x rootwait\n"
+            path.write_text(original)
+            args = argparse.Namespace(action="cores", value="3", cmdline=path)
+            collect.boot_change(args)
+            self.assertIn("maxcpus=3", path.read_text())
+            args.action, args.value = "ram", "4"
+            collect.boot_change(args)
+            self.assertIn("maxcpus=3", path.read_text())
+            self.assertIn("mem=4G", path.read_text())
+            args.value = "restore"
+            collect.boot_change(args)
+            self.assertEqual(path.read_text(), original)
+            path.write_text(original.strip() + " new_option=1\n")
+            with self.assertRaisesRegex(RuntimeError, "other boot options changed"):
+                collect.boot_change(args)
+
+    def test_rejected_control_write_identifies_path_and_value(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "online"
+            path.write_text("1\n")
+            with mock.patch.object(Path, "write_text", side_effect=OSError(22, "Invalid argument")):
+                with self.assertRaisesRegex(RuntimeError, "cannot write '0'.*online.*previous='1'"):
+                    collect.write_control(path, "0")
+
+    def test_restore_does_not_retry_broken_cpu_hotplug(self):
+        with mock.patch.object(collect, "online_cpus", return_value=[0, 1, 2]), \
+             mock.patch.object(collect, "write_control") as write:
+            with self.assertRaisesRegex(RuntimeError, "reboot to recover"):
+                collect.restore({"online": [0, 1, 2, 3], "policies": {}})
+            write.assert_not_called()
 
     def test_non_pi_cannot_mutate_configuration(self):
         with mock.patch.object(collect.platform, "system", return_value="Darwin"):
@@ -152,7 +245,7 @@ class PlanAndConfigurationTests(unittest.TestCase):
             "scaling_max_freq": "2400000", "cpuinfo_min_freq": "1000000",
             "cpuinfo_max_freq": "2400000", "scaling_available_governors": "performance"}}}
         with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
-            args = argparse.Namespace(ram="8", family="ram", repetitions=1, seed=2160,
+            args = argparse.Namespace(ram="8", cores=4, family="ram", repetitions=1, seed=2160,
                 source="data", binary=Path("/usr/bin/true"), input=HERE / "input.csv",
                 matrix=Path(tmp) / "absent-matrix", results=Path(tmp) / "results")
             # sudo can create a process-group leader that is not a session leader.
@@ -168,11 +261,15 @@ class PlanAndConfigurationTests(unittest.TestCase):
             stack.enter_context(mock.patch.object(collect, "command_output", return_value={"returncode": 0}))
             stack.enter_context(mock.patch.object(collect.os, "chown"))
             one_run = stack.enter_context(mock.patch.object(collect, "one_run"))
-            stack.enter_context(mock.patch.object(collect, "restore"))
+            restore = stack.enter_context(mock.patch.object(collect, "restore"))
             stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
             collect.run(args)
             one_run.assert_called_once()
             setsid.assert_not_called()
+            one_run.side_effect = RuntimeError("original core failure")
+            restore.side_effect = RuntimeError("secondary restoration failure")
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaisesRegex(RuntimeError, "original core failure"):
+                collect.run(args)
 
     def test_setup_failure_still_restores_settings_and_records_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -190,6 +287,38 @@ class PlanAndConfigurationTests(unittest.TestCase):
             metadata = json.loads((root / "run/metadata.json").read_text())
             self.assertEqual(metadata["status"], "failed")
             self.assertIn("configuration failed", metadata["error"])
+
+    def test_run_and_restoration_errors_are_both_preserved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = argparse.Namespace(source="data", schedule="periodic", binary=HERE / "input.csv",
+                                      input=HERE / "input.csv", duration=1, period_ms=100, deadline_ms=100)
+            condition = collect.condition_plan(repetitions=1)[0]
+            with mock.patch.object(collect, "configure", side_effect=RuntimeError("CPU3 offline failed")), \
+                 mock.patch.object(collect.os, "chown"), \
+                 mock.patch.object(collect, "restore", side_effect=RuntimeError("CPU3 online failed")):
+                with self.assertRaisesRegex(RuntimeError, "CPU3 offline failed; restoration also failed: CPU3 online failed"):
+                    collect.one_run(args, condition, root / "run", (os.getuid(), os.getgid(), "unused"), {})
+            metadata = json.loads((root / "run/metadata.json").read_text())
+            self.assertEqual(metadata["error"], "CPU3 offline failed")
+            self.assertEqual(metadata["restoration_error"], "CPU3 online failed")
+
+    def test_governor_mismatch_saves_observed_configuration(self):
+        configured = {"online": [0, 1, 2, 3], "policies": {
+            "/mock/policy0": {"scaling_governor": "powersave"}}}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            args = argparse.Namespace(source="data", schedule="periodic", binary=HERE / "input.csv",
+                input=HERE / "input.csv", duration=1, period_ms=100, deadline_ms=100, settle=0)
+            condition = collect.condition_plan(family="ram", repetitions=1)[0]
+            with mock.patch.object(collect, "configure"), mock.patch.object(collect, "check_cores"), \
+                 mock.patch.object(collect.os, "chown"), mock.patch.object(collect, "restore"), \
+                 mock.patch.object(collect, "snapshot", return_value=configured):
+                with self.assertRaisesRegex(RuntimeError, "policy0: requested governor 'performance', observed 'powersave'"):
+                    collect.one_run(args, condition, root / "run", (os.getuid(), os.getgid(), "unused"), configured)
+            metadata = json.loads((root / "run/metadata.json").read_text())
+            self.assertEqual(metadata["configured"], configured)
+            self.assertEqual(metadata["status"], "failed")
 
 
 class ExecutableTests(unittest.TestCase):

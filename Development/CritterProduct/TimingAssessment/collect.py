@@ -71,57 +71,74 @@ def online_cpus():
             or read(CPU / f"cpu{i}/online") == "1"]
 
 
+def active_policies():
+    # Offline CPUs can leave inactive policy directories behind in sysfs.
+    return [p for p in sorted((CPU / "cpufreq").glob("policy*"))
+            if read(p / "affected_cpus")]
+
+
 def snapshot():
     return {"online": online_cpus(), "policies": {
         str(p): {name: read(p / name) for name in
                  ("scaling_governor", "scaling_min_freq", "scaling_max_freq",
                   "scaling_available_governors", "cpuinfo_min_freq", "cpuinfo_max_freq")}
-        for p in sorted((CPU / "cpufreq").glob("policy*"))}}
+        for p in active_policies()}}
 
 
-def set_cores(count):
-    # Bring required CPUs online before removing others. CPU0 always stays online.
-    for i in range(1, count):
-        (CPU / f"cpu{i}/online").write_text("1")
-    for i in range(3, count - 1, -1):
-        if i:
-            (CPU / f"cpu{i}/online").write_text("0")
+def write_control(path, value):
+    path = Path(path)
+    if value is None:
+        raise RuntimeError(f"missing requested value for {path}")
+    previous = read(path)
+    if previous == value:
+        return
+    try:
+        path.write_text(value + "\n")
+    except OSError as exc:
+        raise RuntimeError(f"cannot write {value!r} to {path} (previous={previous!r}): {exc}") from exc
+    actual = read(path)
+    if actual != value:
+        raise RuntimeError(f"{path}: requested {value!r}, read back {actual!r}")
+
+
+def check_cores(count, boot=False):
     if online_cpus() != list(range(count)):
-        raise RuntimeError("online CPU mask did not match requested core count")
+        raise RuntimeError(f"expected CPUs {list(range(count))}, observed {online_cpus()}; "
+                           f"set 'cores {count}' and reboot before collecting")
+    if boot and count < 4:
+        limits = [t for t in (read("/proc/cmdline") or "").split() if t.startswith("maxcpus=")]
+        if limits != [f"maxcpus={count}"]:
+            raise RuntimeError(f"reduced-core collection requires maxcpus={count} at boot; "
+                               "an accidentally offline CPU is not a valid core treatment")
 
 
 def configure(condition):
-    set_cores(4)
-    for policy in (CPU / "cpufreq").glob("policy*"):
+    check_cores(condition["cores"])
+    policies = active_policies()
+    if not policies:
+        raise RuntimeError("no active CPU frequency policies found")
+    for policy in policies:
         governor = condition["governor"]
         if governor not in (read(policy / "scaling_available_governors") or "").split():
             raise RuntimeError(f"{governor} unavailable at {policy}; no governor substitution was made")
-        (policy / "scaling_min_freq").write_text(read(policy / "cpuinfo_min_freq"))
-        (policy / "scaling_max_freq").write_text(read(policy / "cpuinfo_max_freq"))
-        (policy / "scaling_governor").write_text(governor)
-    set_cores(condition["cores"])
+        write_control(policy / "scaling_min_freq", read(policy / "cpuinfo_min_freq"))
+        write_control(policy / "scaling_max_freq", read(policy / "cpuinfo_max_freq"))
+        write_control(policy / "scaling_governor", governor)
 
 
 def restore(state):
+    if online_cpus() != state["online"]:
+        raise RuntimeError("online CPU mask changed; reboot to recover it. Runtime CPU hotplug is disabled")
     errors = []
-    try:
-        set_cores(4)
-    except (OSError, RuntimeError) as exc:
-        errors.append(str(exc))
     for policy, fields in state["policies"].items():
         for name, value in (("scaling_min_freq", fields["cpuinfo_min_freq"]),
                             ("scaling_max_freq", fields["scaling_max_freq"]),
                             ("scaling_min_freq", fields["scaling_min_freq"]),
                             ("scaling_governor", fields["scaling_governor"])):
             try:
-                (Path(policy) / name).write_text(value)
-            except (OSError, TypeError) as exc:
-                errors.append(f"{policy}/{name}: {exc}")
-    try:
-        for i in range(1, 4):
-            (CPU / f"cpu{i}/online").write_text("1" if i in state["online"] else "0")
-    except OSError as exc:
-        errors.append(str(exc))
+                write_control(Path(policy) / name, value)
+            except RuntimeError as exc:
+                errors.append(str(exc))
     if errors:
         raise RuntimeError("restoration needs attention: " + "; ".join(errors))
     actual = snapshot()
@@ -132,16 +149,19 @@ def restore(state):
         raise RuntimeError("restored CPU configuration did not match the saved state")
 
 
-def condition_plan(ram="8", family="all", repetitions=3, seed=2160):
-    base = dict(cores=4, governor="performance", network_mbit=0, matrix=False, nice=0, pinned=False)
-    if ram != "8":
+def condition_plan(ram="8", family="all", repetitions=3, seed=2160, cores=4):
+    base = dict(cores=cores, core_method="boot", governor="performance", network_mbit=0,
+                matrix=False, nice=0, pinned=False)
+    if cores != 4:
+        if ram != "8" or family != "cores":
+            raise ValueError("reduced cores require --ram 8 --family cores; other factors are held constant")
+        conditions = [dict(base, condition=f"cores_{cores}", family="cores")]
+    elif ram != "8":
         if family not in ("all", "ram"):
             raise ValueError("non-native RAM sweeps use --family ram; other factors are held constant")
         conditions = [dict(base, condition=f"ram_{ram}", family="ram")]
     else:
         conditions = [dict(base, condition="baseline", family="baseline")]
-        if family in ("all", "cores"):
-            conditions += [dict(base, condition=f"cores_{n}", family="cores", cores=n) for n in (3, 2, 1)]
         if family in ("all", "governor"):
             conditions += [dict(base, condition=f"governor_{g}", family="governor", governor=g)
                            for g in ("powersave", "ondemand")]
@@ -219,7 +239,7 @@ def telemetry():
     return {"monotonic_ns": time.monotonic_ns(), "online": read(CPU / "online"),
             "policies": {p.name: {k: read(p / k) for k in
                          ("scaling_cur_freq", "scaling_governor", "scaling_min_freq", "scaling_max_freq")}
-                         for p in (CPU / "cpufreq").glob("policy*")},
+                         for p in active_policies()},
             "temperature_millic": read("/sys/class/thermal/thermal_zone0/temp"),
             "meminfo": read("/proc/meminfo"), "vmstat": read("/proc/vmstat"),
             "cpu_stat": read("/proc/stat"), "network": read("/proc/net/dev"),
@@ -263,10 +283,15 @@ def one_run(args, condition, folder, account, state):
         configure(condition)
         time.sleep(args.settle)
         configured = snapshot()
-        for fields in configured["policies"].values():
-            if fields["scaling_governor"] != condition["governor"]:
-                raise RuntimeError("requested governor did not take effect")
         meta["configured"] = configured
+        dump(folder / "metadata.json", meta)
+        check_cores(condition["cores"])
+        if set(configured["policies"]) != set(state["policies"]):
+            raise RuntimeError("active frequency policies changed during setup")
+        for policy, fields in configured["policies"].items():
+            if fields["scaling_governor"] != condition["governor"]:
+                raise RuntimeError(f"{policy}: requested governor {condition['governor']!r}, "
+                                   f"observed {fields['scaling_governor']!r} after settling")
         meta["throttled_before"] = command_output(["vcgencmd", "get_throttled"])
         meta["swaps_before"] = read("/proc/swaps")
         meta["boot_id"] = read("/proc/sys/kernel/random/boot_id")
@@ -343,6 +368,8 @@ def one_run(args, condition, folder, account, state):
             raise RuntimeError("online CPU mask changed during collection")
         expected_limits = {Path(p).name: fields for p, fields in configured["policies"].items()}
         for s in samples:
+            if set(s["policies"]) != set(expected_limits):
+                raise RuntimeError("active frequency policies changed during collection")
             for name, fields in s["policies"].items():
                 if fields["scaling_governor"] != condition["governor"] or any(
                     fields[k] != expected_limits[name][k] for k in ("scaling_min_freq", "scaling_max_freq")):
@@ -375,6 +402,8 @@ def one_run(args, condition, folder, account, state):
         except Exception as exc:
             meta.update(status="failed", restoration_error=str(exc))
             dump(folder / "metadata.json", meta)
+            if meta.get("error"):
+                raise RuntimeError(f"Run failed: {meta['error']}; restoration also failed: {exc}") from exc
             raise
         finally:
             if cleanup_errors:
@@ -390,10 +419,9 @@ def run(args):
     account = identity()
     if os.sched_getscheduler(0) != os.SCHED_OTHER:
         raise RuntimeError("launch the collector under ordinary SCHED_OTHER scheduling")
-    if online_cpus() != [0, 1, 2, 3]:
-        raise RuntimeError("start with all four CPUs online")
+    check_cores(args.cores, boot=True)
     actual_ram = memory_check(args.ram)
-    plan = condition_plan(args.ram, args.family, args.repetitions, args.seed)
+    plan = condition_plan(args.ram, args.family, args.repetitions, args.seed, args.cores)
     state = snapshot()
     if not state["policies"]:
         raise RuntimeError("no CPU frequency policies found")
@@ -455,28 +483,45 @@ def run(args):
             print(f"[{index}/{len(plan)}] {condition['condition']} repetition {condition['repetition']}", flush=True)
             one_run(args, condition, session / f"{index:03d}_{condition['condition']}_r{condition['repetition']}", account, state)
     finally:
+        original_error = sys.exc_info()[1]
         try:
-            restore(state)
+            try:
+                restore(state)
+            except Exception as exc:
+                if original_error is None:
+                    raise
+                print(f"Additional CPU restoration failure: {exc}", file=sys.stderr)
         finally:
-            from analyze import analyze
-            if list(session.glob("*/metadata.json")):
-                analyze(session)
-            for path in [session] + list(session.rglob("*")):
-                os.chown(path, account[0], account[1])
+            try:
+                from analyze import analyze
+                if list(session.glob("*/metadata.json")):
+                    analyze(session)
+                for path in [session] + list(session.rglob("*")):
+                    os.chown(path, account[0], account[1])
+            except Exception as exc:
+                if original_error is None:
+                    raise
+                print(f"Additional result finalization failure: {exc}", file=sys.stderr)
     print(f"Collection complete. Run summaries: {session / 'run_summary.csv'}", flush=True)
 
 
-def change_cmdline(text, ram):
+def change_cmdline(text, ram=None, cores=None):
     lines = text.strip().splitlines()
     if len(lines) != 1 or not any(t.startswith("root=") for t in lines[0].split()):
         raise ValueError("expected one boot command line containing root=; refusing to replace this file")
-    tokens = [t for t in lines[0].split() if not t.startswith("mem=")]
-    if RAM_LIMITS[ram]:
+    tokens = lines[0].split()
+    if ram is not None:
+        tokens = [t for t in tokens if not t.startswith("mem=")]
+    if cores is not None:
+        tokens = [t for t in tokens if not t.startswith("maxcpus=")]
+    if ram is not None and RAM_LIMITS[ram]:
         tokens.append("mem=" + RAM_LIMITS[ram])
+    if cores is not None and cores != 4:
+        tokens.append(f"maxcpus={cores}")
     return " ".join(tokens) + "\n"
 
 
-def ram_change(args):
+def boot_change(args):
     require_pi(root=True)
     path = args.cmdline or next((p for p in (Path("/boot/firmware/cmdline.txt"), Path("/boot/cmdline.txt")) if p.exists()), None)
     if path is None:
@@ -485,11 +530,12 @@ def ram_change(args):
     backup = path.with_name(path.name + ".critter-timing.original")
     if args.value == "restore":
         original = backup.read_text()
-        if change_cmdline(text, "8") != change_cmdline(original, "8"):
-            raise RuntimeError("other boot options changed after backup; restore mem= manually to preserve them")
+        if change_cmdline(text, "8", 4) != change_cmdline(original, "8", 4):
+            raise RuntimeError("other boot options changed after backup; restore mem=/maxcpus= manually to preserve them")
         new = original
     else:
-        new = change_cmdline(text, args.value)
+        new = (change_cmdline(text, ram=args.value) if args.action == "ram"
+               else change_cmdline(text, cores=int(args.value)))
         if not backup.exists():
             with backup.open("x") as f:
                 f.write(text)
@@ -506,7 +552,7 @@ def ram_change(args):
         finally:
             temporary.unlink(missing_ok=True)
     os.sync()
-    print(f"Updated {path}; original backup: {backup}\n{new.strip()}\nReboot manually, then run doctor to verify MemTotal.")
+    print(f"Updated {path}; original backup: {backup}\n{new.strip()}\nReboot manually, then run doctor to verify cores and MemTotal.")
 
 
 def main():
@@ -518,6 +564,8 @@ def main():
     for action in ("plan", "run"):
         p = sub.add_parser(action)
         p.add_argument("--ram", choices=RAM_LIMITS, default="8")
+        p.add_argument("--cores", type=int, choices=(1, 2, 3, 4), default=4,
+                       help="online core count already established at boot; reduced counts require --family cores")
         p.add_argument("--family", choices=("all", "cores", "governor", "ram", "network", "priority"), default="all")
         p.add_argument("--repetitions", type=int, default=3)
         p.add_argument("--seed", type=int, default=2160)
@@ -537,6 +585,9 @@ def main():
     p = sub.add_parser("ram")
     p.add_argument("value", choices=tuple(RAM_LIMITS) + ("restore",))
     p.add_argument("--cmdline", type=Path)
+    p = sub.add_parser("cores")
+    p.add_argument("value", choices=("1", "2", "3", "4"))
+    p.add_argument("--cmdline", type=Path)
     p = sub.add_parser("restore")
     p.add_argument("state", type=Path)
     args = parser.parse_args()
@@ -552,7 +603,7 @@ def main():
         for name in ("binary", "matrix", "input", "results"):
             setattr(args, name, getattr(args, name).resolve())
     if args.action == "plan":
-        plan = condition_plan(args.ram, args.family, args.repetitions, args.seed)
+        plan = condition_plan(args.ram, args.family, args.repetitions, args.seed, args.cores)
         print(json.dumps(plan, indent=2))
         print(f"{len(plan)} runs; minimum collection time {len(plan)*args.duration/60:.1f} minutes; "
               f"approximately {len(plan)*(args.duration+args.settle+args.warmup)/60:.1f} including setup, plus network tails.", file=sys.stderr)
@@ -563,8 +614,8 @@ def main():
                           "swaps": read("/proc/swaps"), "time": command_output(["/usr/bin/time", "--version"]),
                           "iperf3": command_output(["iperf3", "--version"]),
                           "throttled": command_output(["vcgencmd", "get_throttled"])}, indent=2))
-    elif args.action == "ram":
-        ram_change(args)
+    elif args.action in ("ram", "cores"):
+        boot_change(args)
     elif args.action == "restore":
         require_pi(root=True)
         restore(json.loads(args.state.read_text()))

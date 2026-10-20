@@ -79,7 +79,7 @@ to use any online core except in the explicitly pinned priority comparison.
 
 | Sweep | Conditions | Other settings |
 |---|---|---|
-| Cores | 4, 3, 2, 1 online cores | CPUs are actually offlined, not merely hidden from Critter |
+| Cores | 4, 3, 2, 1 online cores | Boot with maxcpus=3/2/1; other CPUs stay offline for that boot |
 | Governor | performance, powersave, ondemand | Same hardware min/max policy bounds for each governor |
 | RAM | Native 8 GB, 4 GiB, 2 GiB, 1.5 GiB | Boot-time mem= limit; four cores, performance, quiet system |
 | Network | Quiet, 10 Mbit/s receive, 50 Mbit/s receive | One UDP stream, 1200-byte payload, same physical interface |
@@ -93,13 +93,14 @@ repeats complete invocations, including their generation/process-start overhead,
 and retains the original time-based random seed. This is a controlled competing
 workload, not an added stage in Critter's HVAC algorithm.
 
-Each repetition block shuffles native-RAM conditions using a recorded seed.
-RAM conditions are separate boot blocks in the requested 8 -> 4 -> 2 -> 1.5
-order; do not describe the entire campaign as fully randomized. Three 60-second
+Each repetition block shuffles the ten four-core/native-RAM conditions using a
+recorded seed. Reduced core counts are separate boot blocks in 3 -> 2 -> 1 order,
+followed by a return to four cores and the RAM blocks in 4 -> 2 -> 1.5 GiB order.
+Do not describe the entire campaign as fully randomized. Three 60-second
 runs per condition give 600 scheduled slots/run and 1,800 slots/condition.
-There are 39 native-RAM runs plus 9 reduced-RAM runs: 48 runs and 48 minutes of
-collection. The unchanged 10-second settling and 5-second warmup add 12 minutes;
-network completion adds approximately another minute. Allow roughly 75-90 minutes
+There are 30 four-core/native-RAM runs, 9 reduced-core/native-RAM runs, and
+9 reduced-RAM runs: 48 runs and 48 minutes of collection. The unchanged 10-second settling and 5-second warmup add 12 minutes;
+network completion adds approximately another minute. Allow roughly 90-110 minutes
 overall for short checks, reboots, and manual steps, depending on the Pi's boot
 time and any cooling breaks. All 16 conditions and all five metrics are retained.
 The baseline supplies the 4-core, performance, quiet-network, native-RAM control.
@@ -152,9 +153,12 @@ will run on the Mac. Doctor shows online CPUs, available governors, frequency
 bounds, MemTotal, boot command line, swap, GNU time, and throttling information.
 If ondemand is missing, try `sudo modprobe cpufreq_ondemand`, then run doctor
 again. If still unavailable, stop and record that limitation; the runner refuses
-to silently substitute a different governor. Runtime core/governor changes are
-restored to the starting settings after each run. All four cores must be online
-when collection starts.
+to silently substitute a different governor. Governor/frequency settings are
+restored after each run. The online mask must match --cores (default 4).
+The collector never writes CPU hotplug controls: on the tested Pi, CPU3 failed
+to restart after runtime offlining (kernel PSCI errors). Core counts are now
+set at boot, with a reboot between counts. This preserves actual online-core
+counts and avoids that failed restart path.
 
 ## Run the experiments from starting the Mac server
 
@@ -207,37 +211,59 @@ find it in System Settings under the active Wi-Fi/Ethernet connection. Keep the
 same interface throughout the study. The Pi needs TCP and UDP access to port
 5201; campus client isolation may require a private LAN or direct Ethernet link.
 
-### 3. Pi terminal save the project location and apply the startup fix
+### 3. Transfer the updated controller, then save the Pi project location
 
-Open a terminal on the Pi in the ECE_2160_Group_C repository root. Use your
-ordinary Pi user account. Paste this block once:
+For this repair, copy the updated Python files and these instructions from the
+Mac to the existing Pi clone. No C rebuild is needed. In Mac terminal B, paste
+this block, enter your usual Pi SSH login when prompted, and press Enter:
 
 ```sh
-assessment="$(git rev-parse --show-toplevel)/Development/CritterProduct/TimingAssessment"
-mkdir -p "$HOME/.cache/critter-timing"
-printf '%s\n' "$assessment" > "$HOME/.cache/critter-timing/assessment"
-
-python3 - "$assessment/collect.py" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text()
-old = "    if os.getsid(0) != os.getpid():\n        os.setsid()\n"
-if old in text:
-    path.write_text(text.replace(old, "", 1))
-    print("Startup fix applied.")
-elif "os.setsid()" not in text:
-    print("Startup fix is already present.")
-else:
-    raise SystemExit("Different collector version; no changes made.")
-PY
+printf 'Pi SSH login (username@hostname-or-IP): '
+read -r critter_pi_login
 ```
 
-This removes the unnecessary session-creation call responsible for the possible
-immediate "Collection stopped: [Errno 1] Operation not permitted" startup error.
-It is safe to repeat and requires no rebuild. Children inherit the collector's
-session, while separate process groups still allow cleanup.
+Then paste in the same Mac terminal:
+
+```sh
+assessment="/Users/matthewketas/Desktop/University of Pittsburgh/Senior Year/7th Semester/Embedded Systems/ECE_2160_Group_C/Development/CritterProduct/TimingAssessment"
+scp "$assessment/collect.py" "$assessment/analyze.py" "$assessment/README.md" \
+  "${critter_pi_login}:/home/matthewketas/Documents/ECE_2160_Group_C/Development/CritterProduct/TimingAssessment/"
+scp "$assessment/tests/test_workflow.py" \
+  "${critter_pi_login}:/home/matthewketas/Documents/ECE_2160_Group_C/Development/CritterProduct/TimingAssessment/tests/"
+```
+
+Alternatively, transfer these same changes through your usual Git commit/push/pull
+workflow. Do not run an older collector after updating the instructions.
+
+Now in a **Pi terminal**, paste:
+
+```sh
+cd "$HOME/Documents/ECE_2160_Group_C"
+assessment="$PWD/Development/CritterProduct/TimingAssessment"
+mkdir -p "$HOME/.cache/critter-timing"
+printf '%s\n' "$assessment" > "$HOME/.cache/critter-timing/assessment"
+python3 "$assessment/collect.py" run --help
+```
+
+Confirm that help includes --cores. The updated version also contains the earlier
+startup fix for the immediate "Operation not permitted" error.
+
+If the failed campaign left CPU3 offline, **reboot once now** before continuing:
+
+```sh
+sudo reboot
+```
+
+After reboot, reconnect to the Pi and paste:
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+cat /sys/devices/system/cpu/online
+```
+
+Expect 0-3. If it is still 0-2, stop and save doctor output; do not retry runtime
+CPU onlining. A reboot is the recovery step, not a confirmed repair of the
+underlying kernel/firmware issue.
 
 Check the Pi configuration:
 
@@ -280,7 +306,7 @@ requested throughput is not proof that rate arrived. Resolve connectivity or
 unsupported rates before main collection. The collector subsequently starts,
 stops, and records the traffic automatically. Do not start matrixmult manually.
 
-### 5. Pi terminal check the baseline and all experiment controls
+### 5. Pi terminal check the baseline and four-core experiment controls
 
 First retry the short baseline with the startup fix:
 
@@ -294,7 +320,7 @@ sudo python3 "$assessment/collect.py" run \
 Expect "Saving 1 runs", a baseline condition, and "Collection complete". The
 session's run_summary.csv should show complete and 100 scheduled cycles.
 
-Now check all 13 native-RAM conditions together:
+Now check the ten four-core/native-RAM conditions together:
 
 ```sh
 critter_mac_ip="$(cat "$HOME/.cache/critter-timing/mac-ip")"
@@ -304,14 +330,14 @@ sudo python3 "$assessment/collect.py" run \
   --results "$assessment/results/smoke"
 ```
 
-Allow approximately six minutes. This session should contain 13 complete runs,
+Allow approximately five minutes. This session should contain 10 complete runs,
 each with 100 scheduled cycles. Check effective masks/niceness, governor records,
 matrix coverage, and achieved network throughput in its saved records. Failed
 runs remain visible and stop the session. Nonzero deadline misses are outcomes;
 do not repeat a run solely to obtain a preferred miss rate. Smoke data stays
 separate from the main dataset.
 
-### 6. Pi terminal collect the native 8 GB campaign
+### 6. Pi terminal collect the four-core native 8 GB campaign
 
 Keep the Mac server running. Paste:
 
@@ -324,20 +350,101 @@ sudo python3 "$assessment/collect.py" run \
   --results "$assessment/results/main"
 ```
 
-Wait for all 39 runs to finish, approximately 50 minutes including setup.
-This covers the shared baseline, cores 3/2/1, powersave/ondemand, both traffic
+Wait for all 30 runs to finish, approximately 40 minutes including setup.
+This covers the shared four-core baseline, powersave/ondemand, both traffic
 levels, the pinned quiet control, and matrix competition at nice -10/0/10/19.
+The reduced-core experiments come next, in separate boots.
 Conditions are shuffled inside each repetition block.
 
 Sudo controls hardware settings, but application/workload children run under
 your ordinary Pi account. Keep cooling, peripherals, storage, and swap unchanged.
-Avoid unrelated transfers and interaction during runs. Runtime core/governor
-settings are restored after each run. The Mac server can remain running while
+Avoid unrelated transfers and interaction during runs. Governor/frequency
+settings are restored after each run; core counts stay fixed throughout a boot. The Mac server can remain running while
 you complete the RAM blocks.
+
+### 6a. Pi terminal set three cores and reboot
+
+Continue only after the 30-run campaign completes. The boot helper backs up
+cmdline.txt once and changes only maxcpus=. It preserves any mem= setting.
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+sudo python3 "$assessment/collect.py" cores 3 && sudo reboot
+```
+
+Reconnect after boot. Paste this block; the expected mask is 0-2:
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+cat /sys/devices/system/cpu/online
+sudo python3 "$assessment/collect.py" run \
+  --ram 8 --cores 3 --family cores --repetitions 1 --duration 10 \
+  --results "$assessment/results/smoke"
+```
+
+If the short check succeeds, collect the three measured runs (about four minutes):
+
+```sh
+sudo python3 "$assessment/collect.py" run \
+  --ram 8 --cores 3 --family cores --repetitions 3 --duration 60 \
+  --source data --schedule periodic --results "$assessment/results/main"
+```
+
+### 6b. Pi terminal set two cores, reboot, and collect
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+sudo python3 "$assessment/collect.py" cores 2 && sudo reboot
+```
+
+Reconnect after boot. The expected mask is 0-1:
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+cat /sys/devices/system/cpu/online
+sudo python3 "$assessment/collect.py" run \
+  --ram 8 --cores 2 --family cores --repetitions 3 --duration 60 \
+  --source data --schedule periodic --results "$assessment/results/main"
+```
+
+### 6c. Pi terminal set one core, reboot, and collect
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+sudo python3 "$assessment/collect.py" cores 1 && sudo reboot
+```
+
+Reconnect after boot. The expected mask is 0:
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+cat /sys/devices/system/cpu/online
+sudo python3 "$assessment/collect.py" run \
+  --ram 8 --cores 1 --family cores --repetitions 3 --duration 60 \
+  --source data --schedule periodic --results "$assessment/results/main"
+```
+
+### 6d. Pi terminal restore four cores and reboot
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+sudo python3 "$assessment/collect.py" cores 4 && sudo reboot
+```
+
+Reconnect after boot and verify the mask is 0-3:
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+cat /sys/devices/system/cpu/online
+```
+
+Keep four cores online for all remaining RAM experiments. The first helper's
+backup remains untouched across both the core and RAM sweeps.
 
 ### 7. Pi terminal set 4 GiB and reboot
 
-Continue only after the native campaign reports completion. The RAM helper
+Continue only after the four-core and reduced-core native-RAM campaigns complete
+and four cores have been restored. The RAM helper
 backs up the boot command line and changes only its mem= limit. Have physical
 SD-card access available for recovery before beginning this sweep.
 
@@ -410,7 +517,7 @@ sudo python3 "$assessment/collect.py" ram restore && sudo reboot
 ```
 
 Wait for reboot, then reconnect/open a new Pi terminal. Runtime cleanup alone
-does not remove a boot RAM cap; this final restoration and reboot are required.
+does not remove boot core/RAM caps; this final restoration and reboot are required.
 
 ### 11. Pi terminal summarize and archive
 
@@ -437,11 +544,11 @@ for row in rows:
 PY
 ```
 
-A single clean campaign has 48 complete main runs: 39 native-RAM runs plus nine
-reduced-RAM runs. Retain any failed attempts rather than deleting them to force
+A single clean campaign has 48 complete main runs: 30 four-core/native-RAM
+runs, nine reduced-core/native-RAM runs, and nine reduced-RAM runs. Retain any failed attempts rather than deleting them to force
 this count. Short checks are in the separate smoke directory. The campaign
-contains 48 measured minutes; allow roughly 75-90 minutes overall for the checks,
-setup, network completion, and RAM reboots.
+contains 48 measured minutes; allow roughly 90-110 minutes overall for the checks,
+setup, network completion, and core/RAM reboots.
 
 Create the archive, including both main data and short-check records:
 
@@ -458,7 +565,8 @@ build snapshots/hashes, and summaries.
 
 run_summary.csv retains every run, including failures. condition_summary.csv
 summarizes whole-run repetitions without pooling different sources, schedules,
-durations, periods/deadlines, or binary/input hashes. mean_run_response_p99_ms is
+durations, periods/deadlines, core-setting methods, or binary/input hashes.
+Older records without core_method are labeled legacy and kept separate. mean_run_response_p99_ms is
 a mean of run-level p99s, not a pooled p99. Telemetry polls roughly once a second
 and can miss brief transitions. No observed maximum establishes a hard bound.
 
@@ -484,9 +592,49 @@ You can stop Mac terminal A's server with Control-C.
 
 ### Recovery if a run or reboot fails
 
-Ctrl-C/SIGTERM stops owned child groups and restores runtime CPU settings.
+If a CPU condition reports "Invalid argument" or a restoration failure, retain
+the failed run and inspect the original error before retrying the full campaign.
+The collector identifies rejected control paths/values, skips settings already
+at their requested value, and preserves the run error alongside any cleanup
+error. A restoration failure does not by itself identify the original cause.
+This read-only diagnostic finds the newest failed record and shows the current
+online-core mask:
+
+```sh
+assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
+python3 - "$assessment/results" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+failed = []
+for path in Path(sys.argv[1]).rglob("metadata.json"):
+    data = json.loads(path.read_text())
+    if data.get("status") == "failed":
+        failed.append((path.stat().st_mtime_ns, path, data))
+if failed:
+    _, path, data = max(failed, key=lambda item: item[0])
+    print("Failed record:", path)
+    for key in ("condition", "error", "restoration_error", "configured"):
+        print(key + ":", data.get(key))
+else:
+    print("No failed metadata record found.")
+print("Currently online:", Path("/sys/devices/system/cpu/online").read_text().strip())
+PY
+sudo dmesg | tail -40
+```
+
+Save that output before rebooting if an older collector left a core offline.
+The observed PSCI CPU3 boot failure requires a reboot for recovery. The updated
+collector never writes cpuN/online and refuses an unexpected online mask.
+Reduced-core runs must have both the matching mask and maxcpus= boot argument.
+A governor mismatch after this fix includes its policy path and observed value;
+save the failed metadata instead of skipping the governor check.
+
+Ctrl-C/SIGTERM stops owned child groups and restores governor/frequency settings.
 SIGKILL or power loss cannot run cleanup. Use a session's original_state.json
-with the collector's restore command if runtime settings need recovery:
+with the collector's restore command if governor/frequency settings need recovery
+within the same core-count boot. It does not attempt CPU hotplug:
 
 ```sh
 assessment="$(cat "$HOME/.cache/critter-timing/assessment")"
@@ -501,7 +649,7 @@ sudo python3 "$assessment/collect.py" restore "$critter_state"
 ```
 
 The normal boot file is /boot/firmware/cmdline.txt (older layouts may use
-/boot/cmdline.txt). If a RAM-limited boot fails, mount the boot partition on the
+/boot/cmdline.txt). If a core/RAM-limited boot fails, mount the boot partition on the
 Mac and restore cmdline.txt from cmdline.txt.critter-timing.original, then boot
 again. Do not change swap settings between RAM blocks.
 
@@ -521,7 +669,7 @@ fixed-input timing experiment. Discuss the sequential pipeline: file I/O and
 filtering delay the next acquisition, while the final predictor is not competing
 inside the periodic acquisition loop. Rank the largest measured impact only
 among the defined treatment levels, since unequal stress severity can change
-that ranking. Keep failed trials and RAM boot-block/time-order limitations
+that ranking. Keep failed trials and core/RAM boot-block/time-order limitations
 visible when explaining conclusions.
 
 ## Method references
@@ -531,5 +679,6 @@ visible when explaining conclusions.
 - Linux clocks and absolute sleeping: https://man7.org/linux/man-pages/man2/clock_nanosleep.2.html
 - Linux scheduling, niceness, and autogroups: https://man7.org/linux/man-pages/man7/sched.7.html
 - Linux CPU frequency policies/governors: https://www.kernel.org/doc/html/latest/admin-guide/pm/cpufreq.html
+- Linux core boot limits: https://www.kernel.org/doc/html/latest/core-api/cpu_hotplug.html (maxcpus=)
 - Linux boot memory limit: https://www.kernel.org/doc/html/latest/admin-guide/kernel-parameters.html (mem=)
 - iperf3 options: https://software.es.net/iperf/invoking.html

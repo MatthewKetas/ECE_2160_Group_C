@@ -107,6 +107,7 @@ def analyze(root):
                "repetition": meta.get("repetition", ""),
                "ram_gib": meta.get("ram_gib", ""), "source": meta.get("source", ""),
                "schedule": meta.get("schedule", ""),
+               "core_method": meta.get("core_method", "legacy"),
                "binary_sha256": meta.get("binary_sha256", ""),
                "input_sha256": meta.get("input_sha256", ""),
                "run_status": meta.get("status", "unverified_local"),
@@ -131,7 +132,7 @@ def analyze(root):
         raise ValueError("no run metadata or timing records found")
     write_csv(root / "run_summary.csv", results)
     groups = []
-    keys = ("condition", "ram_gib", "source", "schedule", "duration_s", "period_ms", "deadline_ms", "binary_sha256", "input_sha256")
+    keys = ("condition", "ram_gib", "core_method", "source", "schedule", "duration_s", "period_ms", "deadline_ms", "binary_sha256", "input_sha256")
     def group_key(row):
         return tuple(str(row.get(k, "")) for k in keys)
     for key in sorted({group_key(r) for r in results}):
