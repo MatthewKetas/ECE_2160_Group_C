@@ -1,0 +1,7 @@
+# Heading revision contract
+
+The edited Reliability V2 DOCX is the content and formatting authority. The supplied power paper controls top-level section names and order only. Preserve the two-column IEEE page geometry, fonts, all body wording, drawings, tables, data, references, relationships, and other package parts from V2. Reorganize existing body elements and replace heading text/styles only. Add Introduction, Background, Approach, Data, Results, Conclusion, References, Acknowledgements, and Source Outlines in the exact order/names used by the power paper; keep subject-specific subsections meaningful to reliability rather than importing irrelevant assembly or power headings. Source Outlines may add a short guide to already-cited materials to fill that required ending section. No scientific content changes.
+
+Namespace: Strict WordprocessingML. Use a document.xml-only package patch; preserve all other package parts byte-for-byte. Source paragraph nodes retain their full run properties. Remove earlier hard page/column breaks only where section reflow requires it. Compare every non-heading source paragraph and table against the result, ensure all original media survives, render the revision, inspect every final page. Source hashes and complete part inventory are in source_inventory.json. Never alter either original document.
+
+Layout QA adjustments: Figure 1 moved after its response/dispatch discussion, caption paragraphs kept intact, and one blank column-break paragraph balances the final page. No original body wording or run formatting was changed.

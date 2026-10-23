@@ -229,7 +229,15 @@ assessment="/Users/matthewketas/Desktop/University of Pittsburgh/Senior Year/7th
 scp "$assessment/collect.py" "$assessment/analyze.py" "$assessment/README.md" \
   "${critter_pi_login}:/home/matthewketas/Documents/ECE_2160_Group_C/Development/CritterProduct/TimingAssessment/"
 scp "$assessment/tests/test_workflow.py" \
-  "${critter_pi_login}:/home/matthewketas/Documents/ECE_2160_Group_C/Development/CritterProduct/TimingAssessment/tests/"
+  matthewketas@ece2160-ketas:~ $ scp "${critter_pi_login}:critter-timing-results.tar.gz" "$HOME/Downloads/"
+cp: cannot stat ':critter-timing-results.tar.gz': No such file or directory
+matthewketas@ece2160-ketas:~ $ ls
+critter-timing-results.tar.gz  Documents  Music     Public     Videos
+Desktop                        Downloads  Pictures  Templates
+matthewketas@ece2160-ketas:~ $ scp "${critter_pi_login}:critter-timing-results.tar.gz" "$HOME/Downloads/"
+cp: cannot stat ':critter-timing-results.tar.gz': No such file or directory
+matthewketas@ece2160-ketas:~ $ 
+"${critter_pi_login}:/home/matthewketas/Documents/ECE_2160_Group_C/Development/CritterProduct/TimingAssessment/tests/"
 ```
 
 Alternatively, transfer these same changes through your usual Git commit/push/pull

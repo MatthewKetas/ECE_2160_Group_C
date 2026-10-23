@@ -1,0 +1,144 @@
+{
+  "verifiedMeans": 96,
+  "headerCounts": {
+    "primary": 48,
+    "conditions": 16,
+    "duration_s": 60,
+    "deadline_ms": 100
+  },
+  "inputChangeRecalculation": "passed; original values restored",
+  "nativeCharts": 7,
+  "chartBindings": [
+    {
+      "title": "Deadline-miss percentage",
+      "series": [
+        {
+          "formula": "'Conditions'!$D$12:$D$27",
+          "categories": "'Conditions'!$B$12:$B$27"
+        },
+        {
+          "formula": "'Conditions'!$E$12:$E$27",
+          "categories": "'Conditions'!$B$12:$B$27"
+        },
+        {
+          "formula": "'Conditions'!$F$12:$F$27",
+          "categories": "'Conditions'!$B$12:$B$27"
+        },
+        {
+          "formula": "'Conditions'!$G$12:$G$27",
+          "categories": "'Conditions'!$B$12:$B$27"
+        }
+      ]
+    },
+    {
+      "title": "Median response time",
+      "series": [
+        {
+          "formula": "'Conditions'!$D$35:$D$50",
+          "categories": "'Conditions'!$B$35:$B$50"
+        },
+        {
+          "formula": "'Conditions'!$E$35:$E$50",
+          "categories": "'Conditions'!$B$35:$B$50"
+        },
+        {
+          "formula": "'Conditions'!$F$35:$F$50",
+          "categories": "'Conditions'!$B$35:$B$50"
+        },
+        {
+          "formula": "'Conditions'!$G$35:$G$50",
+          "categories": "'Conditions'!$B$35:$B$50"
+        }
+      ]
+    },
+    {
+      "title": "p99 response time",
+      "series": [
+        {
+          "formula": "'Conditions'!$D$58:$D$73",
+          "categories": "'Conditions'!$B$58:$B$73"
+        },
+        {
+          "formula": "'Conditions'!$E$58:$E$73",
+          "categories": "'Conditions'!$B$58:$B$73"
+        },
+        {
+          "formula": "'Conditions'!$F$58:$F$73",
+          "categories": "'Conditions'!$B$58:$B$73"
+        },
+        {
+          "formula": "'Conditions'!$G$58:$G$73",
+          "categories": "'Conditions'!$B$58:$B$73"
+        }
+      ]
+    },
+    {
+      "title": "Maximum deadline overrun",
+      "series": [
+        {
+          "formula": "'Conditions'!$D$81:$D$96",
+          "categories": "'Conditions'!$B$81:$B$96"
+        },
+        {
+          "formula": "'Conditions'!$E$81:$E$96",
+          "categories": "'Conditions'!$B$81:$B$96"
+        },
+        {
+          "formula": "'Conditions'!$F$81:$F$96",
+          "categories": "'Conditions'!$B$81:$B$96"
+        },
+        {
+          "formula": "'Conditions'!$G$81:$G$96",
+          "categories": "'Conditions'!$B$81:$B$96"
+        }
+      ]
+    },
+    {
+      "title": "Maximum acquisition gap",
+      "series": [
+        {
+          "formula": "'Conditions'!$D$104:$D$119",
+          "categories": "'Conditions'!$B$104:$B$119"
+        },
+        {
+          "formula": "'Conditions'!$E$104:$E$119",
+          "categories": "'Conditions'!$B$104:$B$119"
+        },
+        {
+          "formula": "'Conditions'!$F$104:$F$119",
+          "categories": "'Conditions'!$B$104:$B$119"
+        },
+        {
+          "formula": "'Conditions'!$G$104:$G$119",
+          "categories": "'Conditions'!$B$104:$B$119"
+        }
+      ]
+    },
+    {
+      "title": "Longest consecutive miss sequence",
+      "series": [
+        {
+          "formula": "'Conditions'!$D$127:$D$142",
+          "categories": "'Conditions'!$B$127:$B$142"
+        },
+        {
+          "formula": "'Conditions'!$E$127:$E$142",
+          "categories": "'Conditions'!$B$127:$B$142"
+        },
+        {
+          "formula": "'Conditions'!$F$127:$F$142",
+          "categories": "'Conditions'!$B$127:$B$142"
+        },
+        {
+          "formula": "'Conditions'!$G$127:$G$142",
+          "categories": "'Conditions'!$B$127:$B$142"
+        }
+      ]
+    }
+  ],
+  "deliberateMissingResponses": {
+    "raw": 4,
+    "chartWindow": 4
+  },
+  "errorScan": "{\"kind\":\"notice\",\"message\":\"Cell search matched 0 entries.\"}"
+}

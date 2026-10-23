@@ -1,0 +1,24 @@
+{
+  "output": "/Users/matthewketas/Desktop/University of Pittsburgh/Senior Year/7th Semester/Embedded Systems/ECE_2160_Group_C/outputs/01a1552a-547b-7833-8b39-eb291c733de7/Reliability_HW_Ketas_V3.docx",
+  "main_headings": [
+    "I. Introduction",
+    "II. Background",
+    "III. Approach",
+    "IV. Data",
+    "V. Results",
+    "VI. Conclusion",
+    "References",
+    "Acknowledgements",
+    "Source Outlines"
+  ],
+  "all_original_non_heading_content_and_run_formatting_preserved": true,
+  "layout_only_changes": [
+    "Keep figure captions intact",
+    "Move Figure 1 after its discussion",
+    "Balance ending columns"
+  ],
+  "unchanged_other_package_parts": 20,
+  "added_source_outline_paragraphs": 4,
+  "tables": 2,
+  "drawings": 2
+}

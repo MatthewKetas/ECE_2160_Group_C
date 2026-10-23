@@ -1,0 +1,1317 @@
+{
+  "edited_source": {
+    "path": "/Users/matthewketas/Desktop/Reliability Homework /Reliability_HW_Ketas_V2.docx",
+    "sha256": "a9c5e6c81b26ad358e554166b5672cbd83b6dd69c7f421b281589ea004a5daab",
+    "blocks": [
+      {
+        "index": 0,
+        "type": "p",
+        "style": "Title",
+        "text": "Timing Predictability of the Critter Embedded System"
+      },
+      {
+        "index": 1,
+        "type": "p",
+        "style": "PaperAuthor",
+        "text": "Matthew Ketas"
+      },
+      {
+        "index": 2,
+        "type": "p",
+        "style": "PaperAffiliation",
+        "text": "Department of Electrical and Computer Engineering"
+      },
+      {
+        "index": 3,
+        "type": "p",
+        "style": "PaperAffiliation",
+        "text": "Swanson School of Engineering, University of Pittsburgh"
+      },
+      {
+        "index": 4,
+        "type": "p",
+        "style": "PaperAffiliation",
+        "text": "Pittsburgh, PA, USA"
+      },
+      {
+        "index": 5,
+        "type": "p",
+        "style": "PaperAffiliation",
+        "text": "mtk67@pitt.edu"
+      },
+      {
+        "index": 6,
+        "type": "p",
+        "style": "PaperAbstract",
+        "text": "Abstract—This study evaluates timing predictability in the Critter, a single-threaded Raspberry Pi 5 prototype for unattended machine-room temperature monitoring. Sixteen conditions vary online cores, CPU governor, system RAM, receive traffic, and scheduling preference under matrix-multiplication competition. The primary dataset contains three 60-second runs per condition with a 100 ms period and deadline. Five measures describe deadline compliance and severity, with median and p99 response reported separately. CPU competition produced the largest repeatable response-time increase: at Critter nice +19, mean run median response was 3.128 ms, versus 0.132 ms for the control, while every job still met its deadline. The largest observed deadline failure occurred in one 1.5 GiB run, with six missed slots, 245.159 ms maximum lateness, and a 444.746 ms acquisition gap. Its p99 was only 0.497 ms, demonstrating why a percentile alone cannot establish reliability. The evidence distinguishes dispatch interference from delays inside I/O, supports cautious evaluation of lower-resource Critter configurations, and connects bounded memory use and service priorities to broader embedded-system requirements. A pacemaker example explains why these measurements support architectural questions but cannot establish hard real-time suitability."
+      },
+      {
+        "index": 7,
+        "type": "p",
+        "style": "PaperKeywords",
+        "text": "Keywords—embedded systems, Critter, timing predictability, soft real time, scheduling, memory pressure"
+      },
+      {
+        "index": 8,
+        "type": "p",
+        "style": "PaperHeading",
+        "text": "I. Introduction and Background"
+      },
+      {
+        "index": 9,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The largest impact on predictability depends on what the product must preserve. In these Critter experiments, ordinary CPU scheduling preference under competition most clearly changed the response-time distribution. A low RAM condition produced the most severe observed interruption, including the only missed deadlines in the primary dataset. These findings answer different parts of the question: a slower but consistently timely job is different from a usually fast job that occasionally leaves a long gap in observation."
+      },
+      {
+        "index": 10,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The Critter product monitors distributed machine rooms to help identify heating, ventilation, and air-conditioning (HVAC) problems. Its I/O unit collects temperatures, its memory unit removes outliers and summarizes history, and its computational unit predicts HVAC behavior. The assignment specifies soft rather than hard real-time requirements and asks which resource conditions most affect predictability [1]. I therefore evaluate whether the prototype delivers scheduled work on time and how much observation continuity is lost when it does not, rather than treating average execution speed as reliability."
+      },
+      {
+        "index": 11,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The measurements and my interpretations are recorded in the annotated analysis workbook and underlying experiment archive [2]. The findings extend my previous power study, which identified lower-resource configurations without establishing timing compliance [3]. An implementation that uses less power is useful to Critter only if its temperature evidence remains sufficiently timely. This paper first defines the experiment, then distinguishes the measured mechanisms and their consequences for the Critter. It closes by applying those lessons to embedded systems with more demanding timing obligations."
+      },
+      {
+        "index": 12,
+        "type": "p",
+        "style": "PaperHeading",
+        "text": "II. Approach"
+      },
+      {
+        "index": 13,
+        "type": "p",
+        "style": "PaperSubheading",
+        "text": "A. Prototype and scheduled workload"
+      },
+      {
+        "index": 14,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The tested program reuses Group C's acquisition, sample-saving, memory-filtering, and prediction functions. During each periodic job, one thread acquires a temperature, saves it to a CSV file, and updates a 100-sample memory window using the existing outlier logic. Prediction and final summary construction occur after the collection interval, not concurrently inside each acquisition job. The implementation therefore represents the present sequential prototype; it does not emulate a future continuously intensive predictor."
+      },
+      {
+        "index": 15,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "All primary runs use the same fixed 22.5 C CSV input and the same executable and input hashes. The data reader opens the file and returns its first numeric temperature on each call. This is a repeatable timing fixture, not a sequential replay or a physical temperature-sensor test. Repeated file access, saving, and filtering remain in the measured path. Timing observations are preallocated and touched before collection, buffered during the run, and exported afterward. Sample saving still occurs during each job, and completion of a buffered write and close does not prove durable SD-card storage."
+      },
+      {
+        "index": 16,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The study assumes a 100 ms period and a 100 ms relative deadline, yielding 600 scheduled slots in one minute. These are experimental requirements derived from the prototype's nominal 10 Hz rate; they were not supplied as physical HVAC limits. Releases are scheduled against CLOCK_MONOTONIC using absolute waits, so processing time does not continually shift the next release. Absolute sleeping avoids the accumulated schedule drift of repeated relative sleeps, but cannot guarantee immediate execution when the wakeup time arrives [4]. If processing runs past future releases, those slots are recorded as skipped rather than recovered through a burst of measurements."
+      },
+      {
+        "index": 17,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The course sleeploop.c illustrates sleep and wakeup variability, and its usleep(500) argument requests 500 microseconds. Its consecutive intervals also include surrounding work and output. The Critter wrapper instead keeps application demand fixed and measures completion relative to the intended release. It does not oversample to compensate for late work."
+      },
+      {
+        "index": 18,
+        "type": "p",
+        "style": "PaperSubheading",
+        "text": "B. Timing reliability and severity measures"
+      },
+      {
+        "index": 19,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "Response time is completion time minus scheduled release time. It includes dispatch delay and elapsed work, including blocking or preemption within that work. A job meets its deadline only when acquisition, saving, and filtering succeed and completion is no later than release plus 100 ms. A legitimate outlier rejection is not an operation failure. Timing reliability here means compliance with this study contract; it is not an estimate of device lifetime or hardware failure probability."
+      },
+      {
+        "index": 20,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The five measures are deadline-miss percentage; median and nearest-rank p99 response for attempted jobs; maximum observed lateness beyond the deadline; maximum gap between successful acquisitions, including interval boundaries; and the longest consecutive sequence of missed slots. Unsuccessful, late, and skipped jobs all count toward the miss rate and streak. A skipped release has no response-time observation, so it is not assigned an invented latency. The streak's slot count describes missed scheduled demand, while the acquisition gap measures the actual interval without a new observation."
+      },
+      {
+        "index": 21,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "GNU time supplies elapsed time, user and system CPU time, peak resident memory, page faults, and context switches [5]. Those process-level measurements help interpret resource use, but the total elapsed time cannot identify which 100 ms deadlines were missed. The per-job trace is the deadline detector. A program that waits for most of a minute can have similar total elapsed time with and without a serious interruption inside that minute."
+      },
+      {
+        "index": 22,
+        "type": "p",
+        "style": "PaperSubheading",
+        "text": "C. Conditions and controls"
+      },
+      {
+        "index": 23,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The common baseline has four online cores, native 8 GB RAM, performance governor, Critter nice 0, and no generated traffic or matrix competitor. Cores are reduced to three, two, and one using boot limits, with the online mask checked. These are system-wide online-core treatments, not merely restrictions on the application's affinity. An initial runtime attempt failed to restore CPU3, so the successful campaign uses separate boots and retains the failed attempt as a setup failure."
+      },
+      {
+        "index": 24,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The governor sweep uses performance, powersave, and ondemand with the same 1.5–2.4 GHz policy bounds. Performance requests the upper permitted frequency, powersave the lower, and ondemand adapts to the load [6]. The RAM sweep applies boot limits of 4, 2, and 1.5 GiB while retaining four cores, performance, and quiet networking. These limits constrain memory managed by the whole Linux system; they do not replace the DRAM hardware or isolate Critter's own allocation."
+      },
+      {
+        "index": 25,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "Networking uses one reverse UDP iperf3 stream from a Mac, with 1200-byte payloads and nominal receive rates of 10 and 50 Mbit/s [7]. Background traffic begins before measurement. The successful primary tests achieved 9.963–9.990 and 49.711–49.977 Mbit/s, respectively. The priority comparison first pins a quiet Critter to CPU0, then adds the instructor's repeating 1000-by-1000 integer matrix multiplication on that same CPU. The matrix worker remains nice 0; Critter is tested at nice -10, 0, +10, and +19. "
+      },
+      {
+        "index": 26,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "Application and workload children use ordinary SCHED_OTHER scheduling and share the recorded autogroup and cgroup. Linux nice values influence scheduling preference within this environment; they do not reserve a processor or provide a hard completion guarantee [8]. The control distinguishes affinity from competition, and matrix nice 0 distinguishes competition from subsequently changing Critter's preference. Changing Critter's nice value affects its whole sequential pipeline, not an independently prioritized sampling thread."
+      },
+      {
+        "index": 27,
+        "type": "p",
+        "style": "PaperSubheading",
+        "text": "D. Repetitions and evidence selection"
+      },
+      {
+        "index": 28,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The main figures use the completed 30-run native-RAM campaign plus six completed three-run core/RAM blocks: 48 runs, 16 conditions, and 28,800 scheduled slots. Conditions are shuffled within each native-RAM repetition; core and RAM treatments occur in successive boots. The archive also retains 18 valid runs from an earlier interrupted campaign, two failed main attempts, and 13 short smoke checks. The earlier complete runs remain separate to preserve a balanced three-run comparison. Inclusion depends on configuration and collection validity, not on obtaining zero misses. The low-RAM run with misses remains included."
+      },
+      {
+        "index": 29,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "All plotted metrics were recomputed from the raw traces and checked against the archived summaries. Means are averages of three whole-run statistics; mean p99 is not a pooled percentile. Observed ranges show repetition differences, not confidence intervals. The small sample supports descriptive comparisons rather than an inferential claim that every small difference is statistically resolved. Before and after every primary run, the Pi reported no recorded throttling flags."
+      },
+      {
+        "index": 30,
+        "type": "p",
+        "style": "PaperHeading",
+        "text": "III. Data and Results"
+      },
+      {
+        "index": 31,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "Table I reports all sixteen conditions. Response values are means of three run-level statistics; misses are totals over 1,800 scheduled slots, and the gap is the worst of the three runs. Only the 1.5 GiB condition recorded deadline misses. This does not make all other settings equivalent: their response distributions differ even when the 100 ms deadline leaves substantial margin."
+      },
+      {
+        "index": 32,
+        "type": "p",
+        "style": "PaperTableHead",
+        "text": "TABLE IRESPONSE AND OBSERVATION CONTINUITY"
+      },
+      {
+        "index": 33,
+        "type": "tbl",
+        "style": "",
+        "text": "ConditionMeanmedian(ms)Meanp99(ms)Misses/1800Worstgap(ms)Baseline0.1350.1570100.0723 cores0.1380.1620100.0732 cores0.1490.1780102.7031 core0.1460.2210100.359Powersave0.1610.1890102.497Ondemand0.1640.1910100.060RAM 4 GiB0.1430.1970103.128RAM 2 GiB0.1310.2390103.540RAM 1.5 GiB0.1280.3396444.746Network 10M0.1380.1590100.061Network 50M0.1400.1640100.069Pinned quiet0.1320.1590100.073Matrix nice -100.1510.1860102.509Matrix nice 00.1512.5820102.530Matrix nice +100.1582.9750103.484Matrix nice +193.1283.1620103.990"
+      },
+      {
+        "index": 34,
+        "type": "p",
+        "style": "PaperTableNote",
+        "text": "Three runs per condition. Responses average run statistics; gap is the worst observed run. Native RAM and performance are supplied by baseline. Matrix stays nice 0. Source: [2]."
+      },
+      {
+        "index": 35,
+        "type": "p",
+        "style": "PaperSubheading",
+        "text": "A. Competition and scheduling preference"
+      },
+      {
+        "index": 36,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The pinned quiet control had mean run median response of 0.132 ms and mean run p99 of 0.159 ms. Adding the nice 0 matrix competitor raised the corresponding p99 to 2.582 ms while the median remained 0.151 ms. At Critter nice +10, mean p99 was 2.975 ms. At nice +19, both typical and tail behavior changed: mean median was 3.128 ms and mean p99 was 3.162 ms. The latter condition's run medians ranged from 2.648 to 4.061 ms. Fig. 1 shows the large separation from the quiet controls."
+      },
+      {
+        "index": 37,
+        "type": "p",
+        "style": "PaperBody",
+        "text": ""
+      },
+      {
+        "index": 38,
+        "type": "p",
+        "style": "PaperCaption",
+        "text": "Fig. 1. Run p99 response across the sixteen conditions. Open circles, squares, and triangles show repetitions 1–3; diamonds show their mean. The logarithmic axis displays both sub-millisecond controls and millisecond competition delays. The dashed control changes to pinned quiet for the priority group."
+      },
+      {
+        "index": 39,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "Nice +19 increased mean median response by about 23.6 times relative to pinned quiet, yet all 1,800 jobs in that condition still met the deadline. Thus the result supports my concern about assigning sensing work the lowest tested scheduling preference, but not a claim that this preference caused deadline failure in the experiment. Conversely, giving Critter nice -10 under competition kept mean p99 at 0.186 ms. This was the highest preference tested, not the highest possible Linux preference or a real-time scheduling class."
+      },
+      {
+        "index": 40,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "Stage timing strengthens the interpretation. Under matrix competition at Critter nice 0, run p99 dispatch delays were 2.407–2.576 ms, whereas p99 elapsed job-work times were 0.110–0.111 ms. At nice +19, dispatch-delay p99 ranged from 2.576 to 3.986 ms. These separate percentiles cannot be added to reconstruct response p99, but their magnitudes are consistent with CPU competition delaying when useful work begins. A fast algorithm does not ensure a prompt start."
+      },
+      {
+        "index": 41,
+        "type": "p",
+        "style": "PaperSubheading",
+        "text": "B. The low RAM interruption"
+      },
+      {
+        "index": 42,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The first 1.5 GiB repetition missed six of its 600 scheduled slots, a 1.00% miss rate. Its other two repetitions had no misses; across that condition the total is six of 1,800 slots, or a mean run miss rate of 0.333%. Table II preserves that variation. The worst attempted response was 345.159 ms, maximum lateness was 245.159 ms, and the longest acquisition gap was 444.746 ms. Four consecutive missed slots represented 400 ms of scheduled demand. These quantities describe different aspects of the interruption and should not be treated as interchangeable outage durations."
+      },
+      {
+        "index": 43,
+        "type": "p",
+        "style": "PaperTableHead",
+        "text": "TABLE IISEVERITY IN THE THREE LOW RAM REPETITIONS"
+      },
+      {
+        "index": 44,
+        "type": "tbl",
+        "style": "",
+        "text": "RunMisses/600p99(ms)Maximumlateness(ms)Maximumgap(ms)Longeststreak(slots)160.497245.159444.7464200.3300.000100.5680300.1890.000102.8390"
+      },
+      {
+        "index": 45,
+        "type": "p",
+        "style": "PaperTableNote",
+        "text": "All other primary runs had zero maximum lateness and zero missed-slot streaks. Slot period is 100 ms. Source: [2]."
+      },
+      {
+        "index": 46,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The trace locates two late attempts. The job released at 13.1 s started only 0.072 ms late, then spent 106.061 ms in sample saving. The job released at 13.4 s started 0.058 ms late, then spent 345.015 ms in acquisition. Those intervals include any blocking or descheduling while inside the respective calls. The remaining four misses were skipped releases. Fig. 2 therefore illustrates a different mechanism from the competition experiment: substantial delay arose after work began, within the I/O path, rather than chiefly before dispatch."
+      },
+      {
+        "index": 47,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "This run's p99 response was only 0.497 ms. It contained 596 attempted jobs, of which only two exceeded 100 ms, and the four skipped slots do not enter the response distribution. A percentile covering almost all attempted jobs can therefore look excellent while the application loses an important interval of observation. The median was also low. My interpretation is that typical speed and predictability of the rare interruption must be examined together."
+      },
+      {
+        "index": 48,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "Low available system memory is a plausible contributor, but capacity alone is not a demonstrated cause. The affected process reported two major page faults, and system-wide telemetry recorded swap and fault activity. Across all primary runs, GNU time reported peak Critter resident memory of 1,088–1,616 KiB, not approximately 1.3 GB; the affected run used 1,600 KiB. Resident size is not the whole system's memory demand. The boot cap also constrains the desktop, services, caches, and other processes, with zram swap already in use. Neither a precise remaining-memory threshold nor allocator causation follows from these records. The two unaffected repetitions make the event a reason for investigation rather than a repeatable failure rate established for every 1.5 GiB deployment."
+      },
+      {
+        "index": 49,
+        "type": "p",
+        "style": "PaperBody",
+        "text": ""
+      },
+      {
+        "index": 50,
+        "type": "p",
+        "style": "PaperCaption",
+        "text": "Fig. 2. Close-up of the first 1.5 GiB run. Two attempted jobs exceeded the dashed 100 ms deadline. Shaded releases were skipped and have no plotted response. Acquisition markers show a 444.746 ms gap. The job with the 345.159 ms response began close to its intended release."
+      },
+      {
+        "index": 51,
+        "type": "p",
+        "style": "PaperSubheading",
+        "text": "C. Core count governors and networking"
+      },
+      {
+        "index": 52,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "With one online core, mean median response was 0.146 ms and mean p99 was 0.221 ms, compared with 0.135 and 0.157 ms at baseline. Powersave produced 0.161 and 0.189 ms, and ondemand produced 0.164 and 0.191 ms. The relative changes are measurable in the descriptive data, but their absolute sizes are small compared with 100 ms. No misses occurred in any of these conditions. One thread cannot run its sequential functions on several cores simultaneously, although extra cores may still accommodate the operating system and other work."
+      },
+      {
+        "index": 53,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The 10 and 50 Mbit/s receive conditions had mean p99 values of 0.159 and 0.164 ms, with no missed slots. Networking was therefore not the dominant timing influence at the tested rates. Across the other fifteen conditions, the largest observed acquisition gap was 103.990 ms, occurring at nice +19 under matrix competition. This was a small continuity change relative to the low-RAM event. These comparisons do not establish that one core combined with powersave and network activity will behave like each isolated treatment: that combination was not tested."
+      },
+      {
+        "index": 54,
+        "type": "p",
+        "style": "PaperHeading",
+        "text": "IV. Implications for the Critter Product"
+      },
+      {
+        "index": 55,
+        "type": "p",
+        "style": "PaperSubheading",
+        "text": "A. Define reliability through useful temperature evidence"
+      },
+      {
+        "index": 56,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "For Critter, I would interpret a timing result through the temperature evidence an unattended operator needs. A 3 ms response may be entirely adequate for this study's 100 ms contract, even though it is much slower than baseline. A 445 ms acquisition gap may also be acceptable for a slowly changing room, but that decision requires the room's dynamics and the allowed warning delay. Soft real time permits a product-specific tolerance; it does not make every delay harmless or allow an average to hide an extended blind interval."
+      },
+      {
+        "index": 57,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "I would specify acquisition continuity, the maximum age of data used by a summary, and the delay before an HVAC concern is reported. These are related obligations rather than one completion statistic. Successful acquisition can still be followed by delayed saving or reporting. A timely program that repeatedly processes stale or incorrect input would not fulfill the product's purpose. The fixed input used here establishes neither physical sensor freshness nor the ability to detect a real temperature excursion."
+      },
+      {
+        "index": 58,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The memory and prediction units depend on the acquisition history. A 100-sample window spans roughly ten seconds only while samples arrive near 10 Hz; gaps or rejected inputs extend the elapsed time represented by the retained history. The implementation stores timestamps and uses their span in analysis, which is preferable to assuming uniform arrivals, but timestamps cannot reconstruct a missing excursion. A delay in one unit can therefore affect what the next unit knows about the room, even when every numerical operation remains correct."
+      },
+      {
+        "index": 59,
+        "type": "p",
+        "style": "PaperSubheading",
+        "text": "B. Prioritize the service rather than a label"
+      },
+      {
+        "index": 60,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "My notes favor giving sampling and reporting precedence over background computation. The competition results support protecting their response margin. However, the current program has no separate sensing, storage, or prediction threads to prioritize independently. Raising its process preference raises the whole measured path, including operations that can block. It would not remove the acquisition and saving stalls observed in the low-RAM run."
+      },
+      {
+        "index": 61,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "For a future version that runs prediction continuously, I would first establish how its resource demand interferes with acquisition, retained history, and reporting. Any proposed separation of these activities would need explicit limits on queues, shared resources, and report age. A high-priority sampler could still wait for a shared lock or for data managed by lower-priority work. The relevant objective is timely delivery of the sensing service through its dependencies, not merely assigning a favorable numeric priority."
+      },
+      {
+        "index": 62,
+        "type": "p",
+        "style": "PaperSubheading",
+        "text": "C. Treat resource reduction and distributed operation as candidates"
+      },
+      {
+        "index": 63,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The one-core and powersave results make lower-resource operation a reasonable candidate for the present workload. They address part of the timing question left open by my power paper [3]. They do not certify that paper's combined configuration: the timing campaign did not combine every power setting, edited assembly, and disabled peripheral. Individual energy savings and isolated timing margins should not be added or assumed to survive in combination."
+      },
+      {
+        "index": 64,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "Likewise, the network trials are encouraging for a distributed Critter installation because moderate receive traffic did not disrupt the tested acquisition schedule. They do not measure end-to-end delivery of a temperature warning, outgoing report bursts, communication loss, or several devices contending for a shared service. A room may be sampled on time while its operator sees old information. The broader application of this result is to distinguish local acquisition predictability from system-level information freshness."
+      },
+      {
+        "index": 65,
+        "type": "p",
+        "style": "PaperSubheading",
+        "text": "D. Bound memory use in the recurring path"
+      },
+      {
+        "index": 66,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "My concern about accumulating data connects directly to both safety and timing. Unbounded retention or pending reports can turn a small monitoring task into a system-memory problem. The current history ring is bounded, but code inspection shows that outlier detection still allocates and frees a temporary temperature array during recurring filtering. Initializing the history and timing trace before collection does not remove all later allocation. No operation failure was recorded, and the measured large stalls occurred in I/O, so this allocation is not established as their cause."
+      },
+      {
+        "index": 67,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "I would favor a fixed, initialized workspace for recurring analysis and explicit storage bounds for any future communication backlog. Holzmann's rule against dynamic allocation after initialization is relevant because it improves the ability to bound and analyze critical memory use [9]. It does not by itself prevent paging of other resources, bound file-system service, or guarantee deadlines under general-purpose Linux. The lesson is to make the entire required path and its resource limits analyzable, rather than treating one coding rule as a complete timing argument."
+      },
+      {
+        "index": 68,
+        "type": "p",
+        "style": "PaperHeading",
+        "text": "V. Broader Embedded Systems Implications"
+      },
+      {
+        "index": 69,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The pacemaker example in my notes makes the consequence of a deadline part of the design decision. A proposed device might give sensing and electrical-stimulation work higher precedence than Bluetooth telemetry. The Critter results illustrate why competing communication or computation should not receive the same treatment as the critical service without analysis. They do not show that a pacemaker can safely combine those activities on one core, or that an observed 100 ms requirement is appropriate for cardiac operation."
+      },
+      {
+        "index": 70,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "A single-core design could be feasible for some specified workload, but feasibility would depend on target-specific worst-case execution, interrupt interference, blocking, shared memory, and communication behavior. A higher-priority function can still be delayed by its dependencies. Increasing the core count also does not automatically remove contention for memory or peripherals. This follows the same reasoning as Critter's sequential pipeline, but the acceptable evidence is different when a missed sensing or stimulation deadline can violate a safety requirement."
+      },
+      {
+        "index": 71,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "Extensive testing under expected and adverse conditions is necessary evidence, yet observing no misses is not a proof that every possible deadline will be met. For hard real-time behavior, I would combine target measurements with bounded execution and interference arguments, explicit failure behavior, and validation of the device in its environment. Jiang, Pajic, and Mangharam's closed-loop pacemaker work illustrates why temporal requirements must be evaluated with the heart's state and operating conditions, rather than with software inputs generated independently of that environment [10]."
+      },
+      {
+        "index": 72,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The low-RAM event reinforces my concern about uncontrolled data growth in such systems. Fixed capacities and controlled allocation can make the required memory envelope easier to reason about, but do not establish a safe device on their own. Critical buffers, stack use, communication queues, and failure paths must all remain within analyzed limits. The transferable lesson is not that memory is always the largest risk or that every service needs maximum priority. It is that the consequence of a missed deadline determines which delays must be bounded and how strong the supporting evidence must be."
+      },
+      {
+        "index": 73,
+        "type": "p",
+        "style": "PaperHeading",
+        "text": "VI. Limitations and Further Validation"
+      },
+      {
+        "index": 74,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "Three one-minute repetitions per condition provide limited exposure to rare events. Core and RAM runs occur in successive boots, so boot state, background work, and time can confound comparisons. One-second telemetry can document resource activity without resolving the immediate cause of a subsecond stall. There is no demonstrated relationship between all delay events and paging, thermal state, or a particular kernel operation. The observed maxima are measurements, not worst-case bounds."
+      },
+      {
+        "index": 75,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "The fixed CSV input and small history simplify I/O and memory demand; the brief predictor runs after acquisition. The results should therefore not be generalized to physical sensor transactions, a large historical dataset, or continuous computationally intensive forecasting. Generated receive traffic is only one network behavior, and the primary condition levels have unequal stress severity. The study ranks the effects it actually tested, not the inherent importance of CPU scheduling, memory, and networking in all embedded systems."
+      },
+      {
+        "index": 76,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "My next priority would be repeating the low-RAM condition with matched background state and more detailed I/O/fault timing, followed by a combined one-core, powersave, and network trial. Representative temperature ramps and interruptions would then connect timing gaps to retained history and report freshness. Those studies would test whether the current candidates remain useful to the real Critter product; none is needed to replace the central observation that dispatch interference and I/O stalls require different explanations."
+      },
+      {
+        "index": 77,
+        "type": "p",
+        "style": "PaperHeading",
+        "text": "VII. Conclusion"
+      },
+      {
+        "index": 78,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "Within the tested Critter workload, matrix competition and scheduling preference produced the largest repeatable change in response time, while one 1.5 GiB run produced the most severe observed deadline failure. Nice +19 increased mean median response to 3.128 ms without missing a deadline. The low-RAM event produced six missed slots, 245.159 ms maximum lateness, a four-slot miss sequence, and a 444.746 ms acquisition gap despite a sub-millisecond p99."
+      },
+      {
+        "index": 79,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "For Critter, the practical result is a set of resource-reduction candidates and a stronger definition of what reliable monitoring must preserve: timely acquisition, useful history, and information that reaches the operator while it is still relevant. Priority can protect dispatch margin but cannot guarantee a path that blocks inside I/O. The pacemaker comparison extends that reasoning to hard real-time work, where favorable averages and extensive tests must be supported by bounded timing and environmental validation. Predictability is determined by the required service and its dependencies, not by a single fast average or configuration setting."
+      },
+      {
+        "index": 80,
+        "type": "p",
+        "style": "PaperHeading",
+        "text": "Acknowledgment"
+      },
+      {
+        "index": 81,
+        "type": "p",
+        "style": "PaperBody",
+        "text": "This study uses ECE 2160 Group C's Critter prototype. Generative AI assisted with instrumentation, data analysis, and preparation of the manuscript using my experimental findings, annotations, and interpretations."
+      },
+      {
+        "index": 82,
+        "type": "p",
+        "style": "PaperHeading",
+        "text": "References"
+      },
+      {
+        "index": 83,
+        "type": "p",
+        "style": "PaperReference",
+        "text": "[1] University of Pittsburgh, ECE 2160, “Reliability homework and Critter product description,” unpublished course assignment, Fall 2026. Assignment text supplied with this study."
+      },
+      {
+        "index": 84,
+        "type": "p",
+        "style": "PaperReference",
+        "text": "[2] M. Ketas and ECE 2160 Group C, “Critter timing assessment,” unpublished course-project materials, Oct. 2026. Sources: critter-timing-results.tar.gz; annotated critter_timing_review.xlsx; TimingAssessment collector, analyzer, and C harness; and Pilot I/O, memory, and computation source. Primary analysis: 48 completed runs in seven sessions; workbook annotations dated Oct. 23, 2026."
+      },
+      {
+        "index": 85,
+        "type": "p",
+        "style": "PaperReference",
+        "text": "[3] M. Ketas, “Evaluating Power Reduction for the Critter Embedded System,” ECE 2160 homework paper, University of Pittsburgh, Sep. 2026. Author-supplied manuscript."
+      },
+      {
+        "index": 86,
+        "type": "p",
+        "style": "PaperReference",
+        "text": "[4] Linux man-pages project, “clock_nanosleep(2),” Linux manual pages. Accessed: Oct. 23, 2026. [Online]. Available: https://man7.org/linux/man-pages/man2/clock_nanosleep.2.html"
+      },
+      {
+        "index": 87,
+        "type": "p",
+        "style": "PaperReference",
+        "text": "[5] Linux man-pages project, “time(1),” sections “GNU version” and resource formats. Accessed: Oct. 23, 2026. [Online]. Available: https://man7.org/linux/man-pages/man1/time.1.html"
+      },
+      {
+        "index": 88,
+        "type": "p",
+        "style": "PaperReference",
+        "text": "[6] The Linux Kernel, “CPU Performance Scaling,” policy attributes and generic governors. Accessed: Oct. 23, 2026. [Online]. Available: https://www.kernel.org/doc/html/latest/admin-guide/pm/cpufreq.html"
+      },
+      {
+        "index": 89,
+        "type": "p",
+        "style": "PaperReference",
+        "text": "[7] ESnet, “Invoking iperf3,” iperf3 documentation. Accessed: Oct. 23, 2026. [Online]. Available: https://software.es.net/iperf/invoking.html"
+      },
+      {
+        "index": 90,
+        "type": "p",
+        "style": "PaperReference",
+        "text": "[8] Linux man-pages project, “sched(7),” sections on SCHED_OTHER, nice values, and autogroups. Accessed: Oct. 23, 2026. [Online]. Available: https://man7.org/linux/man-pages/man7/sched.7.html"
+      },
+      {
+        "index": 91,
+        "type": "p",
+        "style": "PaperReference",
+        "text": "[9] G. J. Holzmann, “The Power of Ten—Rules for Developing Safety Critical Code,” NASA/JPL Laboratory for Reliable Software, 2006, rule 3. [Online]. Available: https://spinroot.com/gerard/pdf/P10.pdf"
+      },
+      {
+        "index": 92,
+        "type": "p",
+        "style": "PaperReference",
+        "text": "[10] Z. Jiang, M. Pajic, and R. Mangharam, “Model-based closed-loop testing of implantable pacemakers,” in Proc. IEEE/ACM Int. Conf. Cyber-Physical Systems, 2011, pp. 131–140, doi: 10.1109/ICCPS.2011.28."
+      },
+      {
+        "index": 93,
+        "type": "sectPr",
+        "style": "",
+        "text": ""
+      }
+    ],
+    "parts": {
+      "[Content_Types].xml": "52a9b45498fd4e4a7aaca88eb783436cf5d9233fde9beaa39eb84943edff8fd0",
+      "_rels/.rels": "2043a974103d132b7358365752b2861f49dcc0a95f0edce629fbb536a94a037f",
+      "word/document.xml": "34444045104cceb9a2eeba161206928aeb2335e43d56796dbec8525f925dd452",
+      "word/_rels/document.xml.rels": "31fe0206592daf1790ccedc7b5fbcd6226fdf9796834147c21783ef063fa54a7",
+      "word/footnotes.xml": "157eefe939782af3eb3de1d71596467c8c9e8b1d3e2feebf1155ce03ce2ea102",
+      "word/endnotes.xml": "4d87e801a7bffe6570e6824edba0b3b13ed7c73ad78eac20c15c67b04bf42631",
+      "word/header1.xml": "ac98b388bfb5a7f9474cd59bade05c0d59136539c1e741b6808a51572f6c0829",
+      "word/header2.xml": "342d480d46745905185ddeb45cbd903bac94f6e92cce6908fc82608f73e1143d",
+      "word/media/image1.png": "22e2408efe47ef135324e4a38f8ab5b248471811caaf62552099e09c21010cf3",
+      "word/media/image2.png": "fbe60914ea4458875b76ee5a12c44b558327e6b606f69ddd47a4e08cd7fe8d09",
+      "word/theme/theme1.xml": "6ffe7c7938f6233e0b06600f7cc99a05f737a9ca9f78fedb0b3767b42fa3c43b",
+      "word/settings.xml": "faed9e52b58235bcff9e8cafbed6a2c453405435eb0e1ece9e62377429fa17bb",
+      "customXml/item1.xml": "c8092edbb672f8c93f1d5ef66539a6f169462ba8738b785b59cc5d96f4aca59a",
+      "customXml/itemProps1.xml": "278dcd3cc1c3b5257b509a022185e13fbadd260da500e8c1f530754920fb0de6",
+      "word/numbering.xml": "fb1202cec6ccdb423ceaaacd0a1ee1865932e51033dfe3b17e731bfb41944d09",
+      "word/styles.xml": "431e11de8df11efb68b8d0cb1a63aec57aac333d745ea098e4c24eb8e31e62f6",
+      "word/webSettings.xml": "f6baf511dfeaa6ddb9c503289a607695bc145820a30ee9455d5094944aeaa87e",
+      "word/fontTable.xml": "4efc9633b763446983f14903f5fad7eb1085af54d97ad039549e1f2065d47c6d",
+      "docProps/core.xml": "53ae68892837932df46de8e572daade95a61d38a9f0921cd3d5db88e25439c5d",
+      "docProps/app.xml": "8690237e7ec441cf5570b6e35e51d0a5bd8d6b4dae660bb3e0944214dabc9f33",
+      "customXml/_rels/item1.xml.rels": "4831d1fdf56c0f3fe45545260bc6787792fc4f5bb657104f421297079159c313"
+    }
+  },
+  "heading_reference": {
+    "path": "/Users/matthewketas/Desktop/University of Pittsburgh/Senior Year/7th Semester/Embedded Systems/Power Homework/Power_HW_Ketas_VF.docx",
+    "sha256": "65cedbdfbcee0ac73664ff60dc0632f1b821179997ba25087336b90e1b6d5f69",
+    "blocks": [
+      {
+        "index": 0,
+        "type": "p",
+        "style": "Title2",
+        "text": "Evaluating Power Reduction for the Critter Embedded System"
+      },
+      {
+        "index": 1,
+        "type": "p",
+        "style": "",
+        "text": ""
+      },
+      {
+        "index": 2,
+        "type": "p",
+        "style": "Author",
+        "text": "Matthew KetasDept. of Electrical and Computer EngineeringSwanson School of Engineering, University of PittsburghPittsburgh, PA, USAmtk67@pitt.edu"
+      },
+      {
+        "index": 3,
+        "type": "p",
+        "style": "",
+        "text": ""
+      },
+      {
+        "index": 4,
+        "type": "p",
+        "style": "",
+        "text": ""
+      },
+      {
+        "index": 5,
+        "type": "p",
+        "style": "Abstract",
+        "text": "Abstract—This case study evaluates a five-step approach to reducing power consumption in the Critter, a Raspberry Pi 5 prototype for unattended machine-room temperature monitoring. The approach examines CPU core availability, frequency governor, maximum clock frequency, assembly optimization, and unused peripherals while retaining the three-unit I/O, memory, and prediction structure. Eighty-four runs across sixteen conditions were measured through the power management integrated circuit over consistent 60-second windows. The combined configuration reduced mean measured rail power from 1.882696 W to 1.614476 W, a 14.25% reduction. The complete assembly variant produced a 10.22% reduction, the largest observed reduction among separately evaluated full-program treatments. Memory showed a 19.03% reduction relative to its own baseline, whereas I/O evidence was inconclusive and the single-call computation experiment could not resolve prediction energy. The results support further validation of a low-power Critter configuration, but do not establish total device energy, timing compliance, or prediction accuracy. Deployment decisions must preserve fresh temperature measurements, useful history, and timely reporting of HVAC behavior."
+      },
+      {
+        "index": 6,
+        "type": "p",
+        "style": "Keywords",
+        "text": "Keywords—embedded systems, Critter, Raspberry Pi 5, PMIC, power measurement, assembly optimization"
+      },
+      {
+        "index": 7,
+        "type": "p",
+        "style": "Heading1",
+        "text": "I. Introduction"
+      },
+      {
+        "index": 8,
+        "type": "p",
+        "style": "BodyText",
+        "text": "With all power saving techniques applied, the combined Critter configuration used 0.268220 W less mean PMIC rail power than the original full-program configuration over a 60-second measurement window. This represents a 14.25% reduction, with estimated window energy decreasing from 112.961768 J to 96.868548 J [4]. Reducing unnecessary software operations and matching the platform configuration to the workload produced a measurable benefit. The next question is whether that benefit can be retained while the deployed product continues to monitor a room reliably."
+      },
+      {
+        "index": 9,
+        "type": "p",
+        "style": "BodyText",
+        "text": "This work was completed for ECE 2160, Embedded Computer System Design, at the University of Pittsburgh. The course connects embedded implementation with C, assembly, data structures, I/O, and real-time behavior [1]. The power assignment requires evaluating device configuration and edited assembly using Critter’s three prototype units [2]. Each unit of the Critter exists as a pipeline within the monitoring product: I/O supplies fresh data, memory retains useful evidence, and computation produces meaningful HVAC estimates. A configuration that saves power by losing measurements would not satisfy that purpose."
+      },
+      {
+        "index": 10,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Section II establishes the product and measurement context. Section III describes the five-step approach and the trials. Section IV presents the workbook data and charts. Section V explains the configuration results, all nine assembly changes, and the implications for Critter and embedded systems as a whole. Section VI concludes with further study required."
+      },
+      {
+        "index": 11,
+        "type": "p",
+        "style": "Heading1",
+        "text": "II. Background"
+      },
+      {
+        "index": 12,
+        "type": "p",
+        "style": "Heading2",
+        "text": "A.  The Critter and the evaluation objective"
+      },
+      {
+        "index": 13,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The Critter supports temperature monitoring across distributed machine rooms and preliminary identification of heating, ventilation, and air-conditioning (HVAC) issues. The implementation evaluated here represents one independently operating device in one room. I/O acquires and saves measurements; memory validates, filters, and summarizes recent samples; computation estimates temperature trends and extrapolates a prediction 30 seconds ahead. The Pilot reports information and does not control HVAC equipment [2]–[4]."
+      },
+      {
+        "index": 14,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The original program is single-threaded. During approximately one minute of acquisition, it reads a sample, saves it, passes it to the memory unit, and requests a 100 ms sleep. Processing time is added to that delay, so 10 Hz is a nominal target rather than a guaranteed sampling rate. Memory retains up to 100 accepted samples and uses median absolute deviation to detect outliers. Computation consumes a summary after acquisition. Although the assignment distinguishes I/O, memory, and computational behavior, this implementation’s prediction function is brief and its memory working set is small [3], [4]. Those properties limit what the prototype can tell us about a future intensive forecasting workload."
+      },
+      {
+        "index": 15,
+        "type": "p",
+        "style": "BodyText",
+        "text": "My previous safety paper identified 49 confirmed finding records involving data persistence, source identity, buffer state, numeric behavior, and other concerns [3]. That history matters here because power optimization must preserve the behavior we intend to keep without treating existing defects as acceptable requirements. Matching the original assembly output establishes regression evidence for tested inputs; it does not establish correct HVAC predictions or resolve every safety finding."
+      },
+      {
+        "index": 16,
+        "type": "p",
+        "style": "Heading2",
+        "text": "B.  Power measurement and reduction tactics"
+      },
+      {
+        "index": 17,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The Raspberry Pi 5 PMIC exposes paired voltage and current readings for twelve monitored rails. Summing their voltage and current products gives a useful rail-power estimate, but it excludes loads outside those rails and is not a measurement of total USB-C input power. The assignment’s forum discussion and RPi5-power example motivated this measurement method [5], [6]. "
+      },
+      {
+        "index": 18,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The evaluated tactics change how much processing capacity remains available, the requested CPU operating frequency, and the instructions used for a fixed operation. Linux’s generic performance governor requests the highest frequency permitted by the policy, while powersave requests the lowest permitted frequency [7]. A 1500 MHz maximum therefore does not mean that powersave runs continuously at 1500 MHz. Unused radios can also be disabled in this standalone configuration, but a distributed deployment may need a communication path for data retrieval and fault reporting."
+      },
+      {
+        "index": 19,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Power and energy answer different design questions. Mean power describes the rate of energy use during monitoring. Energy per completed task also depends on execution time. A slower configuration can lower watts while taking longer to finish the same work. This experiment estimates energy for equal monitoring windows, so its power and energy rankings coincide. A separate completed-work experiment is needed before concluding that every reduction in window power saves energy per prediction or per processed dataset."
+      },
+      {
+        "index": 20,
+        "type": "p",
+        "style": "Heading1",
+        "text": "III. Approach"
+      },
+      {
+        "index": 21,
+        "type": "p",
+        "style": "Heading2",
+        "text": "A.  Measurement procedure and evidence"
+      },
+      {
+        "index": 22,
+        "type": "p",
+        "style": "BodyText",
+        "text": "I used an AI-assisted Python logger to call vcgencmd pmic_​read_​adc once per second for sixty readings. The logger pairs each current with its corresponding voltage, rejects incomplete rail sets, and records elapsed time, command duration, summed rail power, and the underlying rail readings. It schedules reads against a monotonic clock and buffers the CSV output until the measurement ends [4]. This reduces repeated disk output during measurement, but Python and the monitoring command still consume power."
+      },
+      {
+        "index": 23,
+        "type": "p",
+        "style": "BodyText",
+        "text": "For each run, mean power is the arithmetic mean of its sixty recorded power values. The workbook estimates energy by multiplying that mean by the nominal 60-second duration. The last sample is near 59 seconds because the logger waits after the final reading; that timestamp is not the full window duration. The CSV files omit the final elapsed duration and program start/finish markers. I therefore report PMIC measurement-window energy without subtracting idle power or claiming isolated application energy."
+      },
+      {
+        "index": 24,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The experimental protocol called for leaving the desktop, display, peripherals, network, and cooling arrangement unchanged except for the intended treatment, allowing the Pi to settle, and avoiding interaction during collection. Ten idle runs and ten full-program baseline runs were collected. Most other conditions have five runs; the retained records contain six two-core runs and six optimized I/O runs, while computation has one run per version. All 84 runs and 5,040 samples were retained. The trials were collected sequentially rather than in randomized blocks [4]."
+      },
+      {
+        "index": 25,
+        "type": "p",
+        "style": "Heading2",
+        "text": "B.  The five-step evaluation process"
+      },
+      {
+        "index": 26,
+        "type": "p",
+        "style": "BodyText",
+        "text": "I organized the work into five checks: reduce available cores while preserving required behavior; select a suitable frequency governor; reduce the maximum frequency; optimize and validate assembly; and disable hardware unnecessary to the intended deployment. These checks are a suggested planning framework, and different embedded systems may also have differing optimal orders. Power-saving treatments were compared against a baseline during experimentation rather than applied as a fully documented cumulative sequence."
+      },
+      {
+        "index": 27,
+        "type": "p",
+        "style": "BodyText",
+        "text": "For this experiment, each change had a recorded configuration, an expected mechanism/reduction, and a repeatable workload. A promising configuration was then combined with other accepted changes and measured again because individual savings were not always assumed to add. Table I includes every recorded condition. Figures 1–3 retain the eight comparisons from the analysis workbook [4]."
+      },
+      {
+        "index": 28,
+        "type": "p",
+        "style": "Heading2",
+        "text": "C.  Baseline and device configuration trials"
+      },
+      {
+        "index": 29,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The idle condition ran the logger with Critter stopped. The full-program baseline ran the original Pilot alongside the same logger and is labeled as four cores in the workbook. During these runs the Pi was configured with the Ondemand speed governor and a maximum CPU frequency of 2400 MHz. As the Ondemand speed governor was used, the baseline is therefore an observed configuration, not evidence that the Pi remained at maximum frequency throughout every run."
+      },
+      {
+        "index": 30,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The core-count trials ran the complete program with two cores and then one core available. Linux CPU hotplug provides a reproducible implementation: keep CPU0 online, write 0 to the cpu2/online and cpu3/online controls for two cores, and additionally write 0 to cpu1/online for one core under /sys/​devices/system/​cpu/. Writing 1 restores those cores; the online mask verifies the result [8]. These commands describe how to reproduce the intended settings. The measurement files do not retain the original shell commands or verify physical power gating. The comparison is about available CPU cores, not a claim that every offlined core consumes zero power."
+      },
+      {
+        "index": 31,
+        "type": "p",
+        "style": "BodyText",
+        "text": "For the frequency trials, the recorded protocol sets scaling_​max_​freq under /sys/​devices/system/​cpu/cpufreq/policy0 to 2100, 1800, and 1500 MHz. It selects performance through scaling_​governor and calls vcgencmd measure_​clock arm, measure_​temp, and get_​throttled for inspection. Five full-program runs were recorded at each cap. A further five runs used powersave with the 1500 MHz maximum. The files preserve the intended condition labels but do not contain continuous clock, temperature, governor, or throttling telemetry [4]."
+      },
+      {
+        "index": 32,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The final five runs combined one available CPU core, a 1500 MHz maximum, powersave, all nine assembly edits, and disabled Wi-Fi and Bluetooth. "
+      },
+      {
+        "index": 33,
+        "type": "p",
+        "style": "Heading2",
+        "text": "D.  Trials for the three prototype units"
+      },
+      {
+        "index": 34,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The standalone I/O executable reused the Pilot’s acquisition and saving functions, 60-second loop, progress output, and 100 ms delay. Memory processing and prediction were excluded. The comparison contains five baseline and six assembly-optimized runs. Source priority remained Sense HAT, saved data, then CPU-temperature fallback. In this particular case, the CPU temperature was measured as I did not have access to the Sense HAT [4]."
+      },
+      {
+        "index": 35,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The Memory executable replayed the same 600 compiled-in synthetic temperatures, spaced at 0.1-second timestamps, with six injected outliers. It initialized the same 100-sample buffer, processed each input once with a 100 ms pause, and generated a final summary. Expected outcomes were 600 valid inputs, zero invalid inputs, six outliers, and 100 retained samples. The original API counts outliers as valid inputs even though it excludes them from retention. Five runs were collected for each version. This fixed-work replay takes slightly more than a minute, so the 60-second logger may miss its final processing and summary. It measures window power rather than total energy for all 600 inputs."
+      },
+      {
+        "index": 36,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The computation executable called the actual prediction function once using the fixed Memory summary and a 30-second horizon. The logger started first, followed by a two-second delay and the computation process. The expected output was 25.732950 °C. One baseline and one optimized run were retained. A one-second sampler cannot reliably resolve such a short function call, and most of this measurement window contains background activity rather than prediction work. This trial documents the limitation of the chosen instrumentation for the computational unit."
+      },
+      {
+        "index": 37,
+        "type": "p",
+        "style": "Heading2",
+        "text": "E.  Assembly preparation and validation"
+      },
+      {
+        "index": 38,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The archived assembly identifies GCC 14.2.0 targeting 64-bit ARM Linux, using C11 and -O0. The units were translated with gcc -std=c11 -O0 -Wall -Wextra -S -fverbose-asm, with the Pilot include directory supplied, and the original output was retained before editing. GCC’s -S option stops before assembly, producing editable assembly source [9]. With the help of AI assistance, nine individual optimizations were found in the assembly that were compatible with the Pilot implementation. The edited files were then assembled and linked with the math library into standalone I/O, Memory, and Computation executables."
+      },
+      {
+        "index": 39,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The complete optimized Pilot linked the edited unit assembly. Its build script carried the standalone I/O delay change into a generated copy of Pilot’s main function by replacing the runtime delay conversion with the fixed 100 ms timespec before emitting assembly. Thus the integrated trial represents the nine changes, although this main-function change was reproduced through generated C rather than by linking the standalone I/O entry point [4]."
+      },
+      {
+        "index": 40,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The repository’s equivalence test compares original and edited ARM routines, including ring state, summaries, sorting, standard deviation, prediction boundaries, invalid inputs, allocation failures, sensor-register read failures, pressure conversion, and the sleep interval. The harness assembles the Linux files and adapts object-format details for native testing, with sensor reads mocked. This verifies the tested instruction behavior, not Raspberry Pi timing, physical I/O, or product-level correctness."
+      },
+      {
+        "index": 41,
+        "type": "p",
+        "style": "Heading2",
+        "text": "F.  Statistical comparison"
+      },
+      {
+        "index": 42,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Each CSV is one experimental repetition. The sixty samples within a CSV are used to estimate its mean rather than being counted as sixty independent trials. I report the mean and sample standard deviation across runs. The workbook uses two-sided Welch tests, which allow unequal sample sizes and variances, with a 0.05 threshold [10]. Bonferroni adjustment is applied within five exploratory comparison families: cores (3 tests), clock settings (6), governor (1), estimable assembly comparisons (3), and combined configuration (9). There is no correction across all five families."
+      },
+      {
+        "index": 43,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The computation comparison is descriptive because one observation per version cannot estimate between-run variance. Power and energy tests are mathematically redundant because each energy value is exactly sixty times the corresponding power. Small p-values describe separation in the recorded runs; they do not eliminate differences in temperature, background activity, input source, or other unrecorded conditions across collection dates."
+      },
+      {
+        "index": 44,
+        "type": "p",
+        "style": "",
+        "text": ""
+      },
+      {
+        "index": 45,
+        "type": "p",
+        "style": "Heading1",
+        "text": "IV. Data"
+      },
+      {
+        "index": 46,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Table I summarizes all sixteen datasets in master_​power_​energy_​analysis.xlsx. SD describes variation among run means, not the PMIC’s calibration accuracy. An absent SD denotes one run rather than zero variability. Whole-program treatments use the full-program baseline as their reference; unit-specific assembly trials use their own unit baseline. The source workbook and CSV records provide the underlying observations [4]."
+      },
+      {
+        "index": 47,
+        "type": "p",
+        "style": "tablehead",
+        "text": "TABLE I  MEASURED POWER AND ESTIMATED WINDOW ENERGY"
+      },
+      {
+        "index": 48,
+        "type": "tbl",
+        "style": "",
+        "text": "ConditionRunsMean power (W)Power SD (W)Energy (J)Idle reference101.6660260.03170999.961560Pilot baseline (4 cores)101.8826960.041030112.961768Pilot with 2 cores61.7552200.016153105.313204Pilot with 1 core51.7536180.024218105.217108Pilot at 2100 MHz cap51.9748290.005916118.489767Pilot at 1800 MHz cap51.8665800.009060111.994804Pilot at 1500 MHz cap51.7751010.015690106.506068Pilot at 1500 MHz cap with powersave51.7127850.013871102.767129I/O baseline51.7682540.059499106.095248I/O assembly edits61.7029830.010099102.178958Memory baseline52.1500510.019957129.003076Memory assembly edits51.7408140.015434104.448869Computation baseline12.160038—129.602265Computation assembly edits11.714518—102.871097Complete Pilot assembly edits51.6903290.010450101.419738Combined configuration51.6144760.00319396.868548"
+      },
+      {
+        "index": 49,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Energy = mean power × 60 s. SD is the sample standard deviation across runs. A dash indicates n = 1. Source: [4]."
+      },
+      {
+        "index": 50,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The ten full-program baseline runs averaged 1.882696 W. Relative to that reference, the combined configuration gives the reported 14.25% reduction. Idle power was 1.666026 W in its original configuration. The combined program’s lower value does not imply negative application power: its hardware and software settings differ from those of the idle reference."
+      },
+      {
+        "index": 51,
+        "type": "p",
+        "style": "BodyText",
+        "text": ""
+      },
+      {
+        "index": 52,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Fig. 1. Full-program settings and the idle reference. Blue points show means; gray whiskers show ±1 SD across runs. The x-axis names separate conditions, not cumulative steps or elapsed time. Idle is context only. All figures use a 1.5–2.3 W vertical range to make small differences visible; Table I supplies the absolute values. Energy is omitted as a plotted series because it equals power multiplied by 60 seconds."
+      },
+      {
+        "index": 53,
+        "type": "p",
+        "style": "BodyText",
+        "text": ""
+      },
+      {
+        "index": 54,
+        "type": "p",
+        "style": "BodyText",
+        "text": ""
+      },
+      {
+        "index": 55,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Fig. 2. Device-configuration comparisons from the workbook: (a) available cores, (b) nominal frequency caps, and (c) governors at a nominal 1500 MHz maximum. Blue points and gray whiskers show mean ±1 SD, with run counts in the x-axis labels. The unknown baseline clock is a separate category. Connecting lines guide comparison and do not represent a continuous response curve."
+      },
+      {
+        "index": 56,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The two reduced-core configurations had nearly identical means. Within the three specified clock caps, measured mean power increased from 1500 to 1800 to 2100 MHz. The powersave condition used less power than the protocol’s performance condition at the same maximum. The original baseline’s operating clock was not logged, so it cannot be placed at an assumed frequency on a numeric axis. While the scaling_​max_​freq was set to 2400 MHz, as the governor was set to Ondemand for the baseline, I was unable to determine the frequency as the Critter application was running."
+      },
+      {
+        "index": 57,
+        "type": "p",
+        "style": "BodyText",
+        "text": ""
+      },
+      {
+        "index": 58,
+        "type": "p",
+        "style": "BodyText",
+        "text": ""
+      },
+      {
+        "index": 59,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Fig. 3. Assembly comparisons for (a) I/O, (b) Memory, (c) Computation, and (d) the complete Pilot. The workbook labels these as compiler optimizations; the treatments here are hand-edited assembly derived from -O0 output. Whiskers show ±1 SD where repetitions exist. Computation has one run per version and therefore no error bars or inferential test. Every panel includes its own workload baseline."
+      },
+      {
+        "index": 60,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The I/O mean declined from 1.768254 to 1.702983 W, but its baseline variability was relatively large. Memory declined from 2.150051 to 1.740814 W with much less variation among repetitions. The complete Pilot declined from 1.882696 to 1.690329 W. These comparisons support investigating repeated memory processing as an optimization target, but the standalone unit values cannot be added to reconstruct the whole-program value because they contain shared platform power and different workload schedules."
+      },
+      {
+        "index": 61,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The computation panel’s apparent 20.63% decrease describes two entire monitoring windows. It is not a measurement of a 20.63% reduction in prediction energy. Its unusually high baseline, the short single call, and the lack of repeated runs make it unsuitable for ranking computation against I/O or Memory. The numerical values are included for completeness without presenting them as an established optimization result."
+      },
+      {
+        "index": 62,
+        "type": "p",
+        "style": "",
+        "text": ""
+      },
+      {
+        "index": 63,
+        "type": "p",
+        "style": "Heading1",
+        "text": "V. Results"
+      },
+      {
+        "index": 64,
+        "type": "p",
+        "style": "Heading2",
+        "text": "A.  Effects of cores and frequency policy"
+      },
+      {
+        "index": 65,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Reducing available cores from the labeled four-core baseline to one reduced mean power by 6.86%, or 0.129078 W; two cores reduced it by 6.77%, or 0.127476 W. The adjusted p-values were 0.0000149 and 0.00000288, respectively. The one-versus-two-core difference was only 0.001602 W and was not statistically resolved (adjusted p = 1.000). These data support testing fewer cores, but do not establish one core as superior to two."
+      },
+      {
+        "index": 66,
+        "type": "p",
+        "style": "BodyText",
+        "text": "For Critter, this is plausible because the prototype’s three functional units execute sequentially rather than on three dedicated threads. However, the operating system, logger, file writes, and future communication work still need CPU time. I would retain one core as a candidate for the current standalone workload and keep two cores available as an alternative if timing tests show contention. Adding parallel prediction or network services would require measuring the revised workload again."
+      },
+      {
+        "index": 67,
+        "type": "p",
+        "style": "BodyText",
+        "text": "At 1500 MHz, mean power was 5.71% below baseline (adjusted p = 0.0000433). The 1800 MHz condition was only 0.86% below baseline and inconclusive (adjusted p = 1.000). The 2100 MHz condition was 4.89% above baseline (adjusted p = 0.000270). Thus, the data do not show that every clock change reduced power. Among the explicitly tested caps, 1500 MHz was lower than both 1800 and 2100 MHz after adjustment. The baseline’s unknown frequency policy prevents interpreting the 2100 MHz result as an anomaly in a controlled frequency sweep."
+      },
+      {
+        "index": 68,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Selecting powersave at the 1500 MHz maximum reduced the mean from 1.775101 to 1.712785 W, an additional 3.51% relative to the performance-protocol condition (p = 0.000171). Relative to the original full-program baseline, this configuration was 9.02% lower. Only these two governor conditions were measured. The result identifies a promising policy for this paced workload, not the best governor for every Critter workload or a guarantee that an intensive future prediction will finish on time. This result was also particularly surprising as setting the 1500 MHz cap should have eliminated the purpose of a governor as that is also the lowest possible clock speed on the Pi. However, even with the 1500 MHz ceiling applied, changing the governor to powersave reduced power significantly. "
+      },
+      {
+        "index": 69,
+        "type": "p",
+        "style": "Heading2",
+        "text": "B.  The nine assembly optimization cases"
+      },
+      {
+        "index": 70,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The following cases describe the actual differences between the archived original and edited assembly [4]. Their mechanisms explain why the changes were worth testing. Individual instruction sequences were not measured separately, so no case is assigned its own power-saving percentage."
+      },
+      {
+        "index": 71,
+        "type": "p",
+        "style": "BodyText",
+        "text": "1) Fixed I/O delay construction. IO_​main.s originally loaded the constant 0.1-second interval and repeatedly converted it between floating-point and integer representations to construct a timespec. The edited sequence loads 100000000 and uses STP to store zero seconds and 100000000 nanoseconds together. This removes conversion and arithmetic work on each acquisition iteration while preserving the requested sleep. It is valid for the fixed 100 ms interval; changing the configured interval requires updating the sequence. It does not change sensor sampling requirements or remove the delay."
+      },
+      {
+        "index": 72,
+        "type": "p",
+        "style": "BodyText",
+        "text": "2) Pressure conversion. In sense_​hat_​environment_​read_​pressure, the original code assembled a 24-bit reading, branched for sign extension, converted it to double, and divided by 4096. The edited code uses SBFX to sign-extend the 24 bits and SCVTF with twelve fractional bits to perform the scaled conversion. This preserves the baseline’s raw-value interpretation and error returns while removing an explicit floating-point division and sign-handling branch. It benefits the I/O path only when pressure acquisition executes; a temperature-only fallback would not exercise it."
+      },
+      {
+        "index": 73,
+        "type": "p",
+        "style": "BodyText",
+        "text": "3) Median calculation. critter_​median retains the original exchange-sort comparison and swap order but keeps pointers, loop state, and values in registers instead of repeatedly spilling them to the stack. Pointer increments and shifted addressing locate doubles; a right shift finds the middle index. For an even count, multiplication by 0.5 replaces division by 2. Empty-input behavior and the two-middle-value averaging rule remain. This improves a routine used repeatedly by outlier detection without changing the sorting algorithm or claiming better asymptotic complexity."
+      },
+      {
+        "index": 74,
+        "type": "p",
+        "style": "BodyText",
+        "text": "4) Standard deviation. critter_​stddev uses a register-held accumulator and a post-incrementing load through the input array. It retains the original scalar subtraction, squaring, and addition order, then divides by the sample count. A tail branch to the library sqrt routine avoids a separate return frame while retaining the library operation. Preserving accumulation order matters because changed rounding could alter a later HVAC threshold. This case reduces loop and stack traffic rather than replacing the statistical definition."
+      },
+      {
+        "index": 75,
+        "type": "p",
+        "style": "BodyText",
+        "text": "5) Ring insertion and copying. critter_​add_​in_​ring replaces division-based remainder for advancing the head with increment, comparison, and conditional selection of zero at the capacity boundary. It conditionally increments the count until full. Shifted addition forms the 40-byte sample address, and paired loads and stores transfer the sample’s first 32 bytes before the remaining eight bytes. The optimization depends on an initialized ring with head below capacity and count no greater than capacity. It preserves normal buffer behavior but is not new protection against corrupted ring metadata."
+      },
+      {
+        "index": 76,
+        "type": "p",
+        "style": "BodyText",
+        "text": "6) Outlier-buffer traversal. critter_​detect_​outlier computes the oldest sample index once from head and count, conditionally adding capacity when needed. It then walks the ring by incrementing and wrapping, rather than recomputing a division-based remainder for every temperature copied to the temporary array. The chronological selection of samples remains the same. Because filtering occurs repeatedly during acquisition, removing repeated indexing work can affect more of the monitoring window than optimizing a prediction called only once."
+      },
+      {
+        "index": 77,
+        "type": "p",
+        "style": "BodyText",
+        "text": "7) Paired absolute deviations. The same outlier routine uses NEON vector subtraction and absolute value to calculate two double-precision deviations from the median per iteration. A scalar tail handles an odd number of samples. Each deviation is independent, so the edit does not reorder a floating-point sum. The subsequent median calculation and the original outlier threshold of three times median absolute deviation plus 0.5 °C remain. This reduces loop work while preserving which inputs the baseline retains for the tested datasets."
+      },
+      {
+        "index": 78,
+        "type": "p",
+        "style": "BodyText",
+        "text": "8) Summary construction. critter_​memory_​build_​summary keeps the running sum, minimum, and maximum in registers, advances through the ring without repeated division, and resolves the latest sample once for both its timestamp and temperature. Conditional floating-point selections replace branches for extrema, while paired operations move adjacent fields. The original sum order, source-state transitions, allocation behavior, and calls to median and standard deviation are preserved. For Critter, consistent summary fields are essential because every subsequent trend estimate depends on them. Preserving source transitions also means that this optimization does not itself repair the earlier source-identity findings."
+      },
+      {
+        "index": 79,
+        "type": "p",
+        "style": "BodyText",
+        "text": "9) Prediction and HVAC flags. critter_​compute_​analysis becomes a leaf routine that holds input pointers and intermediate values in caller-saved registers instead of an 80-byte stack frame. It reuses the computed slope and absolute slope and uses conditional comparisons and selections for threshold flags and the elapsed-time fallback. Separate multiply and add operations preserve the baseline rounding behavior rather than introducing fused arithmetic. Tested null-input, empty-summary, and nonfinite-horizon behavior is retained. The result is fewer loads, stores, and branches, but the current power experiment cannot resolve this one call’s energy or establish the model’s forecasting accuracy."
+      },
+      {
+        "index": 80,
+        "type": "p",
+        "style": "Heading2",
+        "text": "C.  Measured assembly effects and their limits"
+      },
+      {
+        "index": 81,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Memory’s mean fell by 19.03% relative to its own baseline, with adjusted p = 3.03 × 10⁻⁹. I/O’s mean fell by 3.69%, but the adjusted p-value was 0.209, so the retained runs do not establish an I/O reduction at the selected threshold. Computation has no estimable p-value. The complete Pilot fell by 10.22%, with adjusted p = 6.83 × 10⁻⁸. Assembly optimization was therefore the largest observed reduction among the separately evaluated full-program treatments, while the combined treatment was lower still."
+      },
+      {
+        "index": 82,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The Memory result is consistent with repeated sorting, copying, and outlier processing making redundant instructions worth removing. It does not identify the fraction saved by NEON, ring indexing, or median alone. Nor does it show that the 100-sample workload saturates memory bandwidth. The complete assembly experiment compares edited code against -O0 output, where GCC leaves most optimizations disabled [9]. A practical next comparison is validated -O2 or -Os C against the hand edits. The current data cannot establish that maintaining custom assembly provides a benefit over normal compiler optimization."
+      },
+      {
+        "index": 83,
+        "type": "p",
+        "style": "Heading2",
+        "text": "D.  Combined configuration and Critter deployment"
+      },
+      {
+        "index": 84,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The combined configuration reached 1.614476 W and 96.868548 J per nominal window, 14.25% below the original baseline (adjusted p = 4.66 × 10⁻⁸). It was lower than every measured full-program alternative within the workbook’s combined-comparison family. It also used 0.075853 W less than the assembly-only configuration, a 4.49% reduction relative to that configuration (adjusted p = 0.000272). The extra reduction includes the combined effect of configuration and radios; it cannot be attributed to a single remaining step. Adding the percentages from separate trials would count overlapping effects and use inconsistent denominators."
+      },
+      {
+        "index": 85,
+        "type": "p",
+        "style": "BodyText",
+        "text": "For an unattended Critter installation, the practical value is reduced energy use during monitoring, provided the same useful measurements and reports are delivered. As an illustration only, sustaining the observed 0.268220 W difference continuously for one year would save about 2.35 kWh in the measured rails per device, or about 235 kWh across 100 devices. This extrapolation assumes unchanged operating conditions and duty cycle. It is not an observed annual saving, a wall-power estimate, or a battery-life prediction."
+      },
+      {
+        "index": 86,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Disabling Wi-Fi and Bluetooth is compatible with this local, independently operating prototype if data can be retrieved through an acceptable alternative. For a distributed installation that relies on wireless telemetry, permanently disabling its only link would prevent remote monitoring. Future experiments would instead need to evaluate scheduled transfers, local buffering during outages, and the delay allowed before an HVAC concern reaches an operator. The required sensor interface, persistent storage, and communication path must remain available whenever the product needs them."
+      },
+      {
+        "index": 87,
+        "type": "p",
+        "style": "Heading2",
+        "text": "E.  Acceptance criteria and further experiments"
+      },
+      {
+        "index": 88,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The absence of HVAC actuation does not make timing irrelevant. A slower acquisition loop provides fewer observations per minute, and a 100-sample buffer then spans a different length of room history. If a hot excursion is missed or a changing temperature is repeatedly rejected as an outlier, lower power would come at the expense of the product’s purpose. The current power logs do not contain the per-configuration sample counts, gaps, dropped samples, reporting latency, or prediction errors needed to certify that requirements were met."
+      },
+      {
+        "index": 89,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Before selecting the final configuration, “high rate” and “timely prediction” should be quantified with  real limits for accepted samples per second, maximum acquisition gap, age of the newest summary data, and delay before a report is available. Replaying known temperature ramps and HVAC cycling traces should check retained samples, source labels, summaries, and predictions. Missing sensors, failed writes, and loss of the communication path should be included because they are directly connected to the prior safety findings [3]. Those are proposed acceptance checks, not outcomes demonstrated by this dataset."
+      },
+      {
+        "index": 90,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The next measurement campaign should randomize or alternate baseline and candidate runs while saving the online-core mask, actual frequency, governor limits, input source, temperatures, throttling state, and program markers. Each configuration needs its own idle reference if incremental workload power is studied. An external input-power meter can test total device savings and quantify monitoring overhead. Memory energy should cover all 600 inputs and the final summary. Computation should be repeated in a controlled batch long enough to measure, with outputs checked and loop overhead accounted for, then assessed in its expected deployment duty cycle."
+      },
+      {
+        "index": 91,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Finally, a radio-only trial would isolate the peripheral contribution, and a larger memory history or a more intensive predictor would test whether the chosen configuration scales to the course product’s intended behavior. The five-step process remains useful because it makes these decisions explicit. Its outcome is a configuration supported by workload and requirement evidence, rather than a universal rule to minimize cores and frequency on every embedded system."
+      },
+      {
+        "index": 92,
+        "type": "p",
+        "style": "Heading1",
+        "text": "VI. Conclusion"
+      },
+      {
+        "index": 93,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The Critter trials demonstrate a 14.25% reduction in mean measured PMIC rail power for a combined configuration using one core, a 1500 MHz maximum, powersave, nine assembly edits, and disabled Wi-Fi and Bluetooth. Assembly optimization alone produced a 10.22% full-program reduction, the largest observed reduction among the separately evaluated full-program treatments. The strong memory result helps identify repeated data processing as a useful target in this prototype; the I/O and computation results require more evidence."
+      },
+      {
+        "index": 94,
+        "type": "p",
+        "style": "BodyText",
+        "text": "For Critter, the appropriate next step is to validate the combined configuration against acquisition continuity, retained history, prediction behavior, and the deployment’s reporting needs. The measurements support that candidate without proving timing compliance, accurate forecasts, or total input-energy savings. The five-step approach can guide future embedded systems work, but each step must remain conditional on the product’s requirements. An optimization is valuable only when the unattended system continues to deliver the temperature evidence needed to identify HVAC problems."
+      },
+      {
+        "index": 95,
+        "type": "p",
+        "style": "Heading1",
+        "text": "References"
+      },
+      {
+        "index": 96,
+        "type": "p",
+        "style": "references",
+        "text": "[1] University of Pittsburgh, “ECE 2160—Embedded Computer System Design,” 2026–2027 Graduate and Professional Studies Catalog. Accessed: Sep. 29, 2026. https:/​/​catalog.upp.pitt.edu/​preview_​course_​nopop.php?​catoid=​242&​coid=​1405515"
+      },
+      {
+        "index": 97,
+        "type": "p",
+        "style": "references",
+        "text": "[2] University of Pittsburgh, ECE 2160, “Power consumption homework and Critter product description,” unpublished course assignment, Fall 2026. Assignment text supplied with this study."
+      },
+      {
+        "index": 98,
+        "type": "p",
+        "style": "references",
+        "text": "[3] M. Ketas, “Characterizing Safety Review Effort for Junior Level Embedded Software,” ECE 2160 homework paper, University of Pittsburgh, Sep. 2026. Author-supplied manuscript, Safety_​HW_​Ketas_​VF.docx."
+      },
+      {
+        "index": 99,
+        "type": "p",
+        "style": "references",
+        "text": "[4] M. Ketas and ECE 2160 Group C, “Critter power assessment,” unpublished course-project materials, Sep. 2026. Sources: master_​power_​energy_​analysis.xlsx, Statistical tests rows 9–52 and Methods; 84 run CSVs; PowerAssessment logger, unit harnesses, original and edited assembly, integration build script, and equivalence tests. Measurements: Sep. 24–28, 2026."
+      },
+      {
+        "index": 100,
+        "type": "p",
+        "style": "references",
+        "text": "[5] Raspberry Pi Forums, “Power Monitoring / System Health Monitoring on RPi 5?,” topic 367244, assignment-provided discussion. Accessed: Sep. 29, 2026. https:/​/​forums.raspberrypi.com/​viewtopic.php?​t=​367244"
+      },
+      {
+        "index": 101,
+        "type": "p",
+        "style": "references",
+        "text": "[6] jfikar, “RPi5-power,” software repository and measurement-method README. Accessed: Sep. 29, 2026. https:/​/​github.com/​jfikar/​RPi5-​power"
+      },
+      {
+        "index": 102,
+        "type": "p",
+        "style": "references",
+        "text": "[7] The Linux Kernel, “CPU Performance Scaling,” sections on policy attributes and generic scaling governors. Accessed: Sep. 29, 2026. https:/​/​www.kernel.org/​doc/​html/​latest/​admin-​guide/​pm/​cpufreq.html"
+      },
+      {
+        "index": 103,
+        "type": "p",
+        "style": "references",
+        "text": "[8] The Linux Kernel, “CPU hotplug in the Kernel,” section “Using CPU hotplug.” Accessed: Sep. 29, 2026. https:/​/​www.kernel.org/​doc/​html/​latest/​core-​api/​cpu_​hotplug.html"
+      },
+      {
+        "index": 104,
+        "type": "p",
+        "style": "references",
+        "text": "[9] Free Software Foundation, Using the GNU Compiler Collection, version 14.2.0, “Overall Options” and “Options That Control Optimization.” https:/​/​gcc.gnu.org/​onlinedocs/​gcc-​14.2.0/​gcc/​Overall-​Options.html and https:/​/​gcc.gnu.org/​onlinedocs/​gcc-​14.2.0/​gcc/​Optimize-​Options.html. Accessed: Sep. 29, 2026."
+      },
+      {
+        "index": 105,
+        "type": "p",
+        "style": "references",
+        "text": "[10] NIST/SEMATECH, e-Handbook of Statistical Methods, “Two-Sample t-Test for Equal Means,” sec. 1.3.5.3. Accessed: Sep. 29, 2026. https:/​/​www.itl.nist.gov/​div898/​handbook/​eda/​section3/​eda353.htm"
+      },
+      {
+        "index": 106,
+        "type": "p",
+        "style": "Heading1",
+        "text": "Acknowledgements"
+      },
+      {
+        "index": 107,
+        "type": "p",
+        "style": "BodyText",
+        "text": "The software implementation for this project was spearheaded by Andre Gilchrist and contributed to by all members of ECE 2160 Group C. AI assistance was used in experimentation, implementation, review, remediation, data analysis, and preparation of this project/report."
+      },
+      {
+        "index": 108,
+        "type": "p",
+        "style": "Heading1",
+        "text": "Source Outlines"
+      },
+      {
+        "index": 109,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Course context [1], [2]. The public Pitt catalog establishes the course title and its embedded implementation topics. The supplied assignment establishes the three Critter units and required power-reduction options. "
+      },
+      {
+        "index": 110,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Prior safety paper [3]. The paper follows Introduction, Background, Approach, Data, Results, Conclusion, References, and Acknowledgements. Its product description, nominal acquisition rate, buffer structure, and findings about source identity and prediction behavior inform this study. The present paper uses that work to define what optimization must preserve, not as evidence that the power variants are safe or accurate."
+      },
+      {
+        "index": 111,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Experimental evidence [4]. The workbook provides run counts, power and window-energy summaries, variability, Welch tests, and comparison families. The source code and assembly establish what each unit and edit actually does. These materials support the reported results but lack continuous configuration telemetry and per-run functional performance records."
+      },
+      {
+        "index": 112,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Measurement background [5], [6]. The forum is retained as an assignment-provided pointer. The RPi5-power author’s README documents the twelve-rail summation and its limits relative to input power. Its calibration constants are specific to its reported setup and are not imported into this study."
+      },
+      {
+        "index": 113,
+        "type": "p",
+        "style": "BodyText",
+        "text": "Implementation and statistics [7]–[10]. Linux documentation supports the governor and core-control descriptions. GCC documentation supports assembly generation and the unoptimized baseline distinction. NIST supports the unequal-variance two-sample comparison. These sources explain mechanisms and methods; the measured percentages come from the Critter records."
+      },
+      {
+        "index": 114,
+        "type": "sectPr",
+        "style": "",
+        "text": ""
+      }
+    ],
+    "parts": {
+      "[Content_Types].xml": "14f6e74018a05d923fb346c2486c9659cbbebb0e1b5fe90c825abd6aff22b762",
+      "_rels/.rels": "2043a974103d132b7358365752b2861f49dcc0a95f0edce629fbb536a94a037f",
+      "word/_rels/document.xml.rels": "0703eab93bfb088314bae70abb946bacacf7bc329ef8bad43aca83fab960dbc3",
+      "word/document.xml": "5e4957a8636bafd61b10d43c3245916b8ed3e7f45bd006131e4d9ecbdb6774f4",
+      "word/footnotes.xml": "8236e9b11465da30484c4a4ab1de82c2aecbc53db8914204e90df8933b7420ac",
+      "word/endnotes.xml": "ea3041ec401ff2c39c95d0fdc4bd952f29fdf09da312d006c5be23960bf46abb",
+      "word/header1.xml": "77722a927592aac4122b99ada15c3c951b699cd577b91760c820b867b0fff9e7",
+      "word/header2.xml": "09daf06fea171b2895acc375864e2a16beb5c5129b214a8c7a280f1d1af40c81",
+      "word/header3.xml": "0853ef4b4e432d2edcd665e90c781a0dbb6355a2afa0622bc238324d98a54eaf",
+      "word/footer1.xml": "affca768564981f1e0db5a76b5e3adb4b3b02379edabf2b3072563932c36ad83",
+      "word/media/image1.png": "f8e8e4878e95035de99fc5e9380a4fc7def5b4aabeb8e7acd7306fcce913cdcc",
+      "word/media/image2.png": "32a4afe0a69778d1db0876e1bb30c9337107e4e755acb03ca20551caea238aea",
+      "word/media/image3.png": "53388fb874eef9de1bf8057e8133d8090652270cf8ac40c9108f1e540bf73aca",
+      "word/theme/theme1.xml": "6ffe7c7938f6233e0b06600f7cc99a05f737a9ca9f78fedb0b3767b42fa3c43b",
+      "word/settings.xml": "f2b5a0249cdfd0c4bb97bf430b81fe19722ddd1e9a5b6505bd27a465f92d0384",
+      "word/styles.xml": "f10f4029c1c0f02928da02d14bf7989388eb2c253f9f7ff2d8c96b5d0bc56600",
+      "word/webSettings.xml": "f6baf511dfeaa6ddb9c503289a607695bc145820a30ee9455d5094944aeaa87e",
+      "word/fontTable.xml": "c1496bdd1099aa6f987128ea4d42464db0b5b14b17359ea61e7fa6b9f755b362",
+      "docProps/core.xml": "b4d82ab156066fa570a4bb2e06edccf1f7b72a035fa6cbbc1eb060f63e05f645",
+      "docProps/app.xml": "5e6293e8e7b001e0e48efd36de896d9cd53e9ae66d0bee68db6fd2c758b437ef",
+      "customXml/itemProps1.xml": "278dcd3cc1c3b5257b509a022185e13fbadd260da500e8c1f530754920fb0de6",
+      "customXml/item1.xml": "c8092edbb672f8c93f1d5ef66539a6f169462ba8738b785b59cc5d96f4aca59a",
+      "customXml/_rels/item1.xml.rels": "4831d1fdf56c0f3fe45545260bc6787792fc4f5bb657104f421297079159c313",
+      "word/numbering.xml": "ac094d5efceed356ef0a8d215ff5f1a7c2dcf46f25e42f5905bd001add5b1339"
+    }
+  }
+}
