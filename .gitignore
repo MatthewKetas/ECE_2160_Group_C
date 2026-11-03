@@ -53,3 +53,17 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Archived power and timing assignments (keep local materials)
+/PowerAssessment/
+/Development/CritterProduct/TimingAssessment/
+/outputs/01a1552a-547b-7833-8b39-eb291c733de7/
+
+# Local desktop and editor state
+.DS_Store
+/.idea/
+/.vscode/
+
+# Generated memory-assessment builds and measurements
+/Development/Metrics/MemoryAssessment/
+/critter-memory-campaign.log
