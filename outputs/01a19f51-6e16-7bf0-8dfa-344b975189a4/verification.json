@@ -1,0 +1,23 @@
+{
+  "statistics": 116,
+  "charts": 17,
+  "sourceChecks": {
+    "checks": 1791,
+    "failures": 0,
+    "runs": 597
+  },
+  "sheets": [
+    "Review",
+    "Interpretations",
+    "Compiler",
+    "Storage",
+    "Linking",
+    "Limits",
+    "Statistics",
+    "Runs",
+    "Builds",
+    "Phases",
+    "Stack frames",
+    "Evidence"
+  ]
+}

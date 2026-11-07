@@ -1,0 +1,224 @@
+[
+  {
+    "sheet": "Compiler",
+    "title": "C1  Integrated pipeline: reported peak RSS",
+    "series": [
+      {
+        "values": "'Compiler'!$B$8:$B$13",
+        "categories": "'Compiler'!$A$8:$A$13"
+      },
+      {
+        "values": "'Compiler'!$C$8:$C$13",
+        "categories": "'Compiler'!$A$8:$A$13"
+      },
+      {
+        "values": "'Compiler'!$D$8:$D$13",
+        "categories": "'Compiler'!$A$8:$A$13"
+      }
+    ]
+  },
+  {
+    "sheet": "Compiler",
+    "title": "C2  Integrated executable code size",
+    "series": [
+      {
+        "values": "'Compiler'!$B$40:$B$45",
+        "categories": "'Compiler'!$A$40:$A$45"
+      }
+    ]
+  },
+  {
+    "sheet": "Compiler",
+    "title": "C3  Individual passes: integrated pipeline RSS",
+    "series": [
+      {
+        "values": "'Compiler'!$B$71:$B$79",
+        "categories": "'Compiler'!$A$71:$A$79"
+      }
+    ]
+  },
+  {
+    "sheet": "Compiler",
+    "title": "C4  Compiler groups across all three units",
+    "series": [
+      {
+        "values": "'Compiler'!$B$108:$B$113",
+        "categories": "'Compiler'!$A$108:$A$113"
+      },
+      {
+        "values": "'Compiler'!$C$108:$C$113",
+        "categories": "'Compiler'!$A$108:$A$113"
+      },
+      {
+        "values": "'Compiler'!$D$108:$D$113",
+        "categories": "'Compiler'!$A$108:$A$113"
+      },
+      {
+        "values": "'Compiler'!$E$108:$E$113",
+        "categories": "'Compiler'!$A$108:$A$113"
+      }
+    ]
+  },
+  {
+    "sheet": "Storage",
+    "title": "S1  Explicit memory-unit heap peak",
+    "series": [
+      {
+        "values": "'Storage'!$B$8:$B$15",
+        "categories": "'Storage'!$A$8:$A$15"
+      }
+    ]
+  },
+  {
+    "sheet": "Storage",
+    "title": "S2  Explicit allocation calls",
+    "series": [
+      {
+        "values": "'Storage'!$B$42:$B$45",
+        "categories": "'Storage'!$A$42:$A$45"
+      }
+    ]
+  },
+  {
+    "sheet": "Storage",
+    "title": "S3  A recurring I/O function’s stack frame",
+    "series": [
+      {
+        "values": "'Storage'!$B$71:$B$74",
+        "categories": "'Storage'!$A$71:$A$74"
+      }
+    ]
+  },
+  {
+    "sheet": "Storage",
+    "title": "S4  History capacity and requested heap",
+    "series": [
+      {
+        "values": "'Storage'!$B$102:$B$104",
+        "categories": "'Storage'!$A$102:$A$104"
+      }
+    ]
+  },
+  {
+    "sheet": "Linking",
+    "title": "L1  Linking choices: reported peak RSS",
+    "series": [
+      {
+        "values": "'Linking'!$B$8:$B$11",
+        "categories": "'Linking'!$A$8:$A$11"
+      },
+      {
+        "values": "'Linking'!$C$8:$C$11",
+        "categories": "'Linking'!$A$8:$A$11"
+      },
+      {
+        "values": "'Linking'!$D$8:$D$11",
+        "categories": "'Linking'!$A$8:$A$11"
+      },
+      {
+        "values": "'Linking'!$E$8:$E$11",
+        "categories": "'Linking'!$A$8:$A$11"
+      }
+    ]
+  },
+  {
+    "sheet": "Linking",
+    "title": "L2  Executable and own-library file sizes",
+    "series": [
+      {
+        "values": "'Linking'!$B$40:$B$43",
+        "categories": "'Linking'!$A$40:$A$43"
+      },
+      {
+        "values": "'Linking'!$C$40:$C$43",
+        "categories": "'Linking'!$A$40:$A$43"
+      }
+    ]
+  },
+  {
+    "sheet": "Linking",
+    "title": "L3  Same diagnostic run: RSS, PSS, and GNU time",
+    "series": [
+      {
+        "values": "'Linking'!$B$72:$B$75",
+        "categories": "'Linking'!$A$72:$A$75"
+      },
+      {
+        "values": "'Linking'!$C$72:$C$75",
+        "categories": "'Linking'!$A$72:$A$75"
+      },
+      {
+        "values": "'Linking'!$D$72:$D$75",
+        "categories": "'Linking'!$A$72:$A$75"
+      }
+    ]
+  },
+  {
+    "sheet": "Linking",
+    "title": "L4  Loading and closing prediction",
+    "series": [
+      {
+        "values": "'Linking'!$B$105:$B$109",
+        "categories": "'Linking'!$A$105:$A$109"
+      },
+      {
+        "values": "'Linking'!$C$105:$C$109",
+        "categories": "'Linking'!$A$105:$A$109"
+      }
+    ]
+  },
+  {
+    "sheet": "Linking",
+    "title": "L5  Targeting the Pi’s processor",
+    "series": [
+      {
+        "values": "'Linking'!$B$135:$B$137",
+        "categories": "'Linking'!$A$135:$A$137"
+      }
+    ]
+  },
+  {
+    "sheet": "Limits",
+    "title": "T1  Data-limit trials: passing variants",
+    "series": [
+      {
+        "values": "'Limits'!$E$8:$E$13",
+        "categories": "'Limits'!$A$8:$A$13"
+      }
+    ]
+  },
+  {
+    "sheet": "Limits",
+    "title": "T2  Stack-limit trials: passing variants",
+    "series": [
+      {
+        "values": "'Limits'!$E$40:$E$44",
+        "categories": "'Limits'!$A$40:$A$44"
+      }
+    ]
+  },
+  {
+    "sheet": "Limits",
+    "title": "T4  Pipeline: screening and 60-second confirmations",
+    "series": [
+      {
+        "values": "'Limits'!$D$92:$D$95",
+        "categories": "'Limits'!$A$92:$A$95"
+      },
+      {
+        "values": "'Limits'!$E$92:$E$95",
+        "categories": "'Limits'!$A$92:$A$95"
+      }
+    ]
+  },
+  {
+    "sheet": "Review",
+    "title": "R1  Selected pipeline comparisons: reported peak RSS",
+    "series": [
+      {
+        "values": "'Review'!$B$16:$B$23",
+        "categories": "'Review'!$A$16:$A$23"
+      }
+    ]
+  }
+]
