@@ -1,3 +1,17 @@
+# Local editor and OS files
+.DS_Store
+/.idea/
+/.vscode/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Generated assessment results and local measurement tools
+/Development/Metrics/MemoryAssessment/
+/Development/CritterProduct/TimingAssessment/results/
+/Development/CritterProduct/TimingAssessment/tools/iperf3/
+
 # Prerequisites
 *.d
 
