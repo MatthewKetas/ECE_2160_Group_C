@@ -95,38 +95,69 @@ def file_evidence(path, expected_rows):
     return digest.hexdigest()
 
 
-def trial(executable, unit, workload, windows, output, profile=None, keep=None):
+def live_io(sensor, unit):
+    return sensor == "sense-hat" and unit in ("io", "pipeline")
+
+
+def minimum_windows(sensor, unit):
+    return 1 if live_io(sensor, unit) else CASES
+
+
+def trial(executable, unit, workload, windows, output, profile=None, keep=None, sensor="replay", oracle=None):
     # Every trial appends to fresh files. Inspect the outputs after the timed work.
     with tempfile.TemporaryDirectory(prefix="trial_", dir=output) as temp:
         scratch = Path(temp)
         samples = scratch / "samples.csv"
         metrics = scratch / "metrics.csv"
         env = dict(os.environ, LC_ALL="C", CRITTER_DATA_FILE=str(samples), CRITTER_METRICS_FILE=str(metrics))
+        hardware = live_io(sensor, unit)
+        if hardware:
+            env["CRITTER_CAPTURE_FILE"] = str(scratch / "capture.bin")
         if profile is not None:
             env["LLVM_PROFILE_FILE"] = str(profile)
         result = json.loads(command([executable, workload, windows], cwd=executable.parent, env=env))
         result["samples_sha256"] = file_evidence(samples, windows * SAMPLES) if unit in ("io", "pipeline") else ""
         result["metrics_sha256"] = file_evidence(metrics, windows) if unit == "pipeline" else ""
-        if unit in ("memory", "pipeline"):
+        if unit in ("memory", "pipeline") and not hardware:
             if result["retained"] != windows * CAPACITY or result["rejected"] or result["outliers"] == 0:
                 raise RuntimeError(f"Unexpected filtering result for {executable}: {result}")
-        if unit in ("computation", "pipeline") and windows >= CASES:
+        if unit in ("computation", "pipeline") and windows >= CASES and not hardware:
             if not all(result[key] for key in ("heating_windows", "cooling_windows", "stable_windows")):
                 raise RuntimeError(f"Missing HVAC decisions for {executable}: {result}")
+        if hardware:
+            if result["sense_hat_samples"] != windows * SAMPLES:
+                raise RuntimeError(f"Incomplete physical Sense HAT acquisition for {executable}")
+            check_env = dict(env, CRITTER_DATA_FILE=str(scratch / "checked_samples.csv"),
+                             CRITTER_METRICS_FILE=str(scratch / "checked_metrics.csv"))
+            check_env.pop("LLVM_PROFILE_FILE", None)
+            checked = json.loads(command([oracle or executable, "check", windows], env=check_env))
+            checked["samples_sha256"] = file_evidence(scratch / "checked_samples.csv", windows * SAMPLES)
+            checked["metrics_sha256"] = file_evidence(scratch / "checked_metrics.csv", windows) if unit == "pipeline" else ""
+            verify(result, checked, executable.parent.parent.name, unit)
+            result["capture_sha256"] = hashlib.sha256((scratch / "capture.bin").read_bytes()).hexdigest()
+        else:
+            result["capture_sha256"] = ""
+        result["validation"] = "O0_same_capture" if hardware else "O0_fixed_input"
         if keep is not None:
             keep.mkdir(parents=True)
-            for path in (samples, metrics):
+            for path in (samples, metrics, scratch / "capture.bin"):
                 if path.is_file():
                     shutil.copyfile(path, keep / path.name)
+            (keep / "result.json").write_text(json.dumps(result, indent=2) + "\n")
+            if hardware:
+                (keep / "O0_check.json").write_text(json.dumps(checked, indent=2) + "\n")
         return result
 
 
-def build(cc, family, objdump, profdata, variant, unit, output):
+def build(cc, family, objdump, profdata, variant, unit, output, sensor="replay", oracle=None):
     number, sources, _ = UNITS[unit]
+    if live_io(sensor, unit):
+        sources = [SENSE_HAT / "sense_hat_environment.c" if p == HERE / "replay_sensor.c" else p for p in sources]
     directory = output / "builds" / variant / unit
     directory.mkdir(parents=True)
     executable = directory / "bench"
     base = [cc, "-std=c11", "-g1", "-ffp-contract=off", f"-DBENCH_UNIT={number}",
+            f"-DBENCH_SENSOR_REAL={int(sensor == 'sense-hat')}",
             "-I", PILOT, "-I", SENSE_HAT, *VARIANTS[variant]]
     inputs = [HERE / "benchmark.c", *sources, "-lm", "-o", executable.name]
     profile_use = []
@@ -143,8 +174,12 @@ def build(cc, family, objdump, profdata, variant, unit, output):
             generate = [f"-fprofile-generate={profile_dir}"]
             profile_use = [f"-fprofile-use={profile_dir}", "-Werror=missing-profile", "-Werror=coverage-mismatch"]
         command([*base, *generate, *inputs], directory, directory / "instrumented-build.log")
-        training = trial(executable, unit, "train", TRAIN_WINDOWS, output, raw if family == "clang" else None)
-        training["windows"] = TRAIN_WINDOWS
+        training_windows = 2 if live_io(sensor, unit) else TRAIN_WINDOWS
+        training = trial(executable, unit, "train", training_windows, output,
+                         raw if family == "clang" else None,
+                         keep=profile_dir / "training_data" if live_io(sensor, unit) else None,
+                         sensor=sensor, oracle=oracle)
+        training["windows"] = training_windows
         (profile_dir / "training.json").write_text(json.dumps(training, indent=2) + "\n")
         if family == "clang":
             command([*profdata, "merge", "-o", indexed, raw], directory, directory / "profile-merge.log")
@@ -160,14 +195,15 @@ def build(cc, family, objdump, profdata, variant, unit, output):
     return executable
 
 
-def calibrate(executable, unit, target_ns, output):
-    windows = CASES
+def calibrate(executable, unit, target_ns, output, sensor="replay"):
+    step = minimum_windows(sensor, unit)
+    windows = step
     while True:
-        probe = trial(executable, unit, "evaluate", windows, output)
+        probe = trial(executable, unit, "evaluate", windows, output, sensor=sensor)
         if probe["wall_ns"] >= target_ns or windows == MAX_WINDOWS:
             return windows
         growth = min(10.0, target_ns / max(1, probe["wall_ns"]) * 1.1)
-        windows = min(MAX_WINDOWS, math.ceil(windows * growth / CASES) * CASES)
+        windows = min(MAX_WINDOWS, math.ceil(windows * growth / step) * step)
 
 
 def verify(result, reference, variant, unit):
@@ -225,11 +261,15 @@ def run(args, output, metadata):
                PILOT / "Computation" / "critter_computation.h"]
     metadata["source_sha256"] = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
                                 for path in sources}
+    if args.sensor == "sense-hat":
+        driver = SENSE_HAT / "sense_hat_environment.c"
+        metadata["source_sha256"][str(driver.relative_to(ROOT))] = hashlib.sha256(driver.read_bytes()).hexdigest()
     executables = {}
     for variant in VARIANTS:
         print(f"Building {variant} for all four workloads", flush=True)
         for unit in UNITS:
-            executables[variant, unit] = build(args.cc, family, args.objdump, profdata, variant, unit, output)
+            executables[variant, unit] = build(args.cc, family, args.objdump, profdata, variant, unit, output,
+                                             sensor=args.sensor, oracle=executables.get(("O0", unit)))
     metadata["executable_bytes"] = {f"{variant}/{unit}": path.stat().st_size
                                    for (variant, unit), path in executables.items()}
 
@@ -238,8 +278,10 @@ def run(args, output, metadata):
     print("Calibrating and checking O0 references", flush=True)
     for unit in UNITS:
         baseline = executables["O0", unit]
-        windows[unit] = CASES if args.smoke else calibrate(baseline, unit, args.target_seconds * 1e9, output)
-        references[unit] = trial(baseline, unit, "evaluate", windows[unit], output, keep=output / "reference" / unit)
+        windows[unit] = minimum_windows(args.sensor, unit) if args.smoke else calibrate(
+            baseline, unit, args.target_seconds * 1e9, output, sensor=args.sensor)
+        references[unit] = trial(baseline, unit, "evaluate", windows[unit], output,
+                                 keep=output / "reference" / unit, sensor=args.sensor)
     metadata["windows"] = windows
     (output / "reference" / "results.json").write_text(json.dumps(references, indent=2) + "\n")
 
@@ -248,7 +290,8 @@ def run(args, output, metadata):
     warmups = list(executables)
     rng.shuffle(warmups)
     for variant, unit in warmups:
-        trial(executables[variant, unit], unit, "evaluate", CASES, output)
+        trial(executables[variant, unit], unit, "evaluate", minimum_windows(args.sensor, unit), output,
+              sensor=args.sensor, oracle=executables["O0", unit])
 
     rows = []
     fields = ["order", "repetition", "variant", "unit", "windows", "operation", "operations",
@@ -262,8 +305,12 @@ def run(args, output, metadata):
             rng.shuffle(order)
             for variant, unit in order:
                 count = windows[unit]
-                result = trial(executables[variant, unit], unit, "evaluate", count, output)
-                verify(result, references[unit], variant, unit)
+                hardware = live_io(args.sensor, unit)
+                keep = output / "trials" / f"{len(rows) + 1:03d}_{variant}_{unit}" if hardware else None
+                result = trial(executables[variant, unit], unit, "evaluate", count, output,
+                               keep=keep, sensor=args.sensor, oracle=executables["O0", unit])
+                if not hardware:
+                    verify(result, references[unit], variant, unit)
                 row = {"order": len(rows) + 1, "repetition": repetition, "variant": variant, "unit": unit,
                        "windows": count, "operation": UNITS[unit][2], "operations": count * SAMPLES, **result}
                 writer.writerow(row)
@@ -274,7 +321,9 @@ def run(args, output, metadata):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--smoke", action="store_true", help="build all variants and run one six-batch repetition")
+    parser.add_argument("--smoke", action="store_true", help="build all variants and run one short repetition")
+    parser.add_argument("--sensor", choices=("sense-hat", "replay"), default="replay" if DARWIN else "sense-hat",
+                        help="physical Sense HAT on Linux (default), or deterministic replay for development")
     parser.add_argument("--repeats", type=int, default=9, help="measured repetitions per variant and workload")
     parser.add_argument("--target-seconds", type=float, default=0.25, help="minimum O0 calibration target per trial")
     parser.add_argument("--cc", default="clang" if DARWIN else "gcc", help="C compiler executable")
@@ -284,16 +333,25 @@ def main():
     args = parser.parse_args()
     if args.repeats < 1 or not 0.01 <= args.target_seconds <= 5.0:
         parser.error("--repeats must be positive and --target-seconds must be between 0.01 and 5.0")
+    if args.sensor == "sense-hat":
+        if platform.system() != "Linux":
+            parser.error("Physical Sense HAT collection requires Linux on the Pi. Use --sensor replay for Mac checks.")
+        if not os.access("/dev/i2c-1", os.R_OK | os.W_OK):
+            parser.error("Cannot access /dev/i2c-1. Enable I2C and grant your Pi user access to the device.")
 
     output = args.output.resolve() / timestamp()
     output.mkdir(parents=True)
     print(f"Results directory: {output}", flush=True)
     metadata = {
-        "status": "running", "started_utc": output.name, "platform": platform.platform(),
+        "status": "running", "schema_version": 2, "sensor": args.sensor,
+        "started_utc": output.name, "platform": platform.platform(),
         "machine": platform.machine(), "smoke": args.smoke, "repetitions": 1 if args.smoke else args.repeats,
         "target_seconds": None if args.smoke else args.target_seconds,
         "seed": SEED, "samples_per_window": SAMPLES, "retained_sample_capacity": CAPACITY,
-        "pgo_training_windows": TRAIN_WINDOWS,
+        "pgo_training_windows": {unit: 2 if live_io(args.sensor, unit) else TRAIN_WINDOWS for unit in UNITS},
+        "workload_sources": {unit: "physical Sense HAT" if live_io(args.sensor, unit) else "generated fixed inputs"
+                             for unit in UNITS},
+        "sampling": "unpaced acquisition with real timestamps" if args.sensor == "sense-hat" else "unpaced replay with nominal 10 Hz timestamps",
         "board_before": board_state(),
     }
     manifest = output / "metadata.json"
